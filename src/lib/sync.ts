@@ -12,8 +12,55 @@ export type SyncPayload = {
 
 export type SyncStatus = "idle" | "syncing" | "online" | "offline" | "error";
 
+type UserDataSlice = Pick<SyncPayload, "clients" | "surveys" | "quotes" | "serviceSheets">;
+
+type LocalExport = {
+  clients: Client[];
+  materials: Material[];
+  surveys: Survey[];
+  quotes: Quote[];
+  serviceSheets: ServiceSheet[];
+};
+
 const MERGE_FLAG_KEY = "electro-cotizador-merged-v1";
 const POLL_INTERVAL_MS = 8000;
+
+type SyncStore = {
+  bulkPut: (items: { id?: number }[]) => Promise<unknown>;
+  toArray: () => Promise<{ id?: number }[]>;
+  delete: (id: number) => Promise<void>;
+};
+
+/** Fusiona datos del servidor en IndexedDB sin borrar todo el cache local. */
+async function mergeServerIntoDexie(data: SyncPayload) {
+  await db.transaction(
+    "rw",
+    [db.clients, db.materials, db.surveys, db.quotes, db.serviceSheets],
+    async () => {
+      await mergeTable(db.clients as unknown as SyncStore, data.clients);
+      await mergeTable(db.materials as unknown as SyncStore, data.materials);
+      await mergeTable(db.surveys as unknown as SyncStore, data.surveys);
+      await mergeTable(db.quotes as unknown as SyncStore, data.quotes);
+      await mergeTable(db.serviceSheets as unknown as SyncStore, data.serviceSheets);
+    },
+  );
+}
+
+async function mergeTable(store: SyncStore, records: { id?: number }[]) {
+  if (records.length > 0) {
+    await store.bulkPut(records);
+  }
+
+  const serverIds = new Set(records.map((record) => record.id).filter((id): id is number => id != null));
+  if (serverIds.size === 0) return;
+
+  const localRecords = await store.toArray();
+  for (const local of localRecords) {
+    if (local.id != null && !serverIds.has(local.id)) {
+      await store.delete(local.id);
+    }
+  }
+}
 
 let syncStatus: SyncStatus = "idle";
 let lastSyncedAt: string | null = null;
@@ -68,26 +115,59 @@ function normalizePayload(payload: SyncPayload): SyncPayload {
   };
 }
 
-export async function applyPayloadToDexie(payload: SyncPayload) {
-  const data = normalizePayload(payload);
-
-  await db.transaction(
-    "rw",
-    [db.clients, db.materials, db.surveys, db.quotes, db.serviceSheets],
-    async () => {
-      await db.clients.clear();
-      await db.materials.clear();
-      await db.surveys.clear();
-      await db.quotes.clear();
-      await db.serviceSheets.clear();
-
-      if (data.clients.length) await db.clients.bulkPut(data.clients);
-      if (data.materials.length) await db.materials.bulkPut(data.materials);
-      if (data.surveys.length) await db.surveys.bulkPut(data.surveys);
-      if (data.quotes.length) await db.quotes.bulkPut(data.quotes);
-      if (data.serviceSheets.length) await db.serviceSheets.bulkPut(data.serviceSheets);
-    },
+function hasUserData(data: UserDataSlice): boolean {
+  return (
+    data.clients.length > 0 ||
+    data.surveys.length > 0 ||
+    data.quotes.length > 0 ||
+    data.serviceSheets.length > 0
   );
+}
+
+async function exportLocalDexie(): Promise<LocalExport> {
+  return {
+    clients: await db.clients.toArray(),
+    materials: await db.materials.toArray(),
+    surveys: await db.surveys.toArray(),
+    quotes: await db.quotes.toArray(),
+    serviceSheets: await db.serviceSheets.toArray(),
+  };
+}
+
+async function upsertAllToServer(local: LocalExport) {
+  for (const client of local.clients) {
+    await postJson({ action: "upsert", table: "clients", record: client });
+  }
+  for (const material of local.materials) {
+    await postJson({ action: "upsert", table: "materials", record: material });
+  }
+  for (const survey of local.surveys) {
+    await postJson({ action: "upsert", table: "surveys", record: survey });
+  }
+  for (const quote of local.quotes) {
+    await postJson({ action: "upsert", table: "quotes", record: quote });
+  }
+  for (const sheet of local.serviceSheets) {
+    await postJson({ action: "upsert", table: "serviceSheets", record: sheet });
+  }
+}
+
+export async function applyPayloadToDexie(payload: SyncPayload) {
+  let data = normalizePayload(payload);
+
+  if (!hasUserData(data)) {
+    const local = await exportLocalDexie();
+    if (hasUserData(local)) {
+      try {
+        await upsertAllToServer(local);
+        data = normalizePayload(await fetchSyncPayload());
+      } catch {
+        return;
+      }
+    }
+  }
+
+  await mergeServerIntoDexie(data);
 }
 
 async function fetchSyncPayload(): Promise<SyncPayload> {
@@ -99,44 +179,17 @@ async function fetchSyncPayload(): Promise<SyncPayload> {
   return response.json();
 }
 
-async function exportLocalDexie() {
-  return {
-    clients: await db.clients.toArray(),
-    materials: await db.materials.toArray(),
-    surveys: await db.surveys.toArray(),
-    quotes: await db.quotes.toArray(),
-    serviceSheets: await db.serviceSheets.toArray(),
-  };
-}
-
-function hasAnyRecords(data: Awaited<ReturnType<typeof exportLocalDexie>>) {
-  return (
-    data.clients.length +
-      data.materials.length +
-      data.surveys.length +
-      data.quotes.length +
-      data.serviceSheets.length >
-    0
-  );
-}
-
 async function mergeLocalOnceIfNeeded() {
   if (typeof window === "undefined") return;
   if (localStorage.getItem(MERGE_FLAG_KEY)) return;
 
   const local = await exportLocalDexie();
-  if (!hasAnyRecords(local)) {
+  if (!hasUserData(local)) {
     localStorage.setItem(MERGE_FLAG_KEY, "1");
     return;
   }
 
-  const response = await fetch("/api/sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "merge", data: local }),
-  });
-
-  if (!response.ok) throw new Error("Merge failed");
+  await upsertAllToServer(local);
   localStorage.setItem(MERGE_FLAG_KEY, "1");
 }
 
@@ -183,20 +236,27 @@ async function postJson(body: unknown) {
   return response.json();
 }
 
+async function persistAndSync<T extends { id?: number }>(
+  store: { put: (record: T) => Promise<unknown> },
+  record: T,
+) {
+  await store.put(record);
+  await pullFromServer().catch(() => undefined);
+}
+
 export const dataStore = {
   clients: {
     async create(data: Omit<Client, "id">) {
       const { record } = await postJson({ action: "upsert", table: "clients", record: data });
-      await db.clients.put(record);
-      await pullFromServer().catch(() => undefined);
+      await persistAndSync(db.clients, record);
       return record.id as number;
     },
     async update(id: number, data: Partial<Client>) {
       const existing = await db.clients.get(id);
       if (!existing) throw new Error("Cliente no encontrado");
       const record = { ...existing, ...data, id, updatedAt: new Date() };
-      await postJson({ action: "upsert", table: "clients", record });
-      await pullFromServer().catch(() => undefined);
+      const { record: saved } = await postJson({ action: "upsert", table: "clients", record });
+      await persistAndSync(db.clients, saved);
     },
     async delete(id: number) {
       await postJson({ action: "delete", table: "clients", id });
@@ -205,8 +265,8 @@ export const dataStore = {
   },
   materials: {
     async create(data: Omit<Material, "id">) {
-      await postJson({ action: "upsert", table: "materials", record: data });
-      await pullFromServer().catch(() => undefined);
+      const { record } = await postJson({ action: "upsert", table: "materials", record: data });
+      await persistAndSync(db.materials, record);
     },
     async delete(id: number) {
       await postJson({ action: "delete", table: "materials", id });
@@ -216,7 +276,7 @@ export const dataStore = {
   surveys: {
     async create(data: Omit<Survey, "id">) {
       const { record } = await postJson({ action: "upsert", table: "surveys", record: data });
-      await pullFromServer().catch(() => undefined);
+      await persistAndSync(db.surveys, record);
       return record.id as number;
     },
     async delete(id: number) {
@@ -227,15 +287,15 @@ export const dataStore = {
   quotes: {
     async create(data: Omit<Quote, "id">) {
       const { record } = await postJson({ action: "upsert", table: "quotes", record: data });
-      await pullFromServer().catch(() => undefined);
+      await persistAndSync(db.quotes, record);
       return record.id as number;
     },
     async update(id: number, data: Partial<Quote>) {
       const existing = await db.quotes.get(id);
       if (!existing) throw new Error("Cotización no encontrada");
       const record = { ...existing, ...data, id, updatedAt: new Date() };
-      await postJson({ action: "upsert", table: "quotes", record });
-      await pullFromServer().catch(() => undefined);
+      const { record: saved } = await postJson({ action: "upsert", table: "quotes", record });
+      await persistAndSync(db.quotes, saved);
     },
     async delete(id: number) {
       await postJson({ action: "delete", table: "quotes", id });
@@ -245,7 +305,7 @@ export const dataStore = {
   serviceSheets: {
     async create(data: Omit<ServiceSheet, "id">) {
       const { record } = await postJson({ action: "upsert", table: "serviceSheets", record: data });
-      await pullFromServer().catch(() => undefined);
+      await persistAndSync(db.serviceSheets, record);
       return record.id as number;
     },
     async delete(id: number) {
