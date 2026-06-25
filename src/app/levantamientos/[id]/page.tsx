@@ -6,7 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import { formatDate } from "@/lib/utils";
-import { GENERAL_PHOTO_CATEGORIES, DIFICULTAD_OPTIONS } from "@/lib/survey-work";
+import { GENERAL_PHOTO_CATEGORIES, DIFICULTAD_OPTIONS, getSurveyAreas } from "@/lib/survey-work";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { SurveySummaryTable } from "@/components/survey/SurveySummaryTable";
@@ -29,6 +29,7 @@ export default function LevantamientoDetallePage() {
   if (survey === undefined) return <p className="text-slate-500">Cargando...</p>;
   if (!survey) return <p className="text-slate-500">Levantamiento no encontrado.</p>;
 
+  const areas = getSurveyAreas(survey);
   const partidas = survey.partidas ?? [];
   const fotosGenerales = survey.fotosGenerales ?? {};
   const fotosLegacy = survey.fotos ?? [];
@@ -78,61 +79,65 @@ export default function LevantamientoDetallePage() {
         </dl>
       </Card>
 
-      {partidas.length > 0 && (
+      {areas.length > 0 && (
         <Card>
           <CardHeader
-            title="Trabajos / partidas"
-            subtitle={`${partidas.length} partida(s)`}
+            title="Áreas y trabajos"
+            subtitle={`${areas.length} área(s) · ${partidas.length} partida(s)`}
           />
           <SurveySummaryTable partidas={partidas} />
-          <div className="mt-4 space-y-4">
-            {partidas.map((p, i) => (
-              <div key={p.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                <p className="font-medium text-slate-900">
-                  {i + 1}. {p.tipoTrabajo}
-                </p>
-                <p className="mt-1 text-slate-600">{p.descripcion}</p>
-                <p className="mt-1 text-slate-500">
-                  {p.cantidad} {p.unidad} · Dificultad {dificultadLabel(p.dificultad)}
-                  {p.area ? ` · ${p.area}` : ""}
-                </p>
-                {p.observaciones && (
-                  <p className="mt-2 text-slate-600">{p.observaciones}</p>
-                )}
-                {p.fotos.length > 0 && (
-                  <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {p.fotos.map((foto, fi) => (
-                      <img
-                        key={fi}
-                        src={foto}
-                        alt={`Partida ${i + 1} foto ${fi + 1}`}
-                        className="aspect-square rounded-lg object-cover"
-                      />
-                    ))}
+          <div className="mt-4 space-y-6">
+            {areas.map((area) => (
+              <div key={area.id} className="space-y-3">
+                <h4 className="text-sm font-semibold text-brand-navy">{area.nombre || "Sin nombre"}</h4>
+                {area.partidas.map((p, i) => (
+                  <div key={p.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                    <p className="font-medium text-slate-900">
+                      {i + 1}. {p.tipoTrabajo}
+                    </p>
+                    <p className="mt-1 text-slate-600">{p.descripcion}</p>
+                    <p className="mt-1 text-slate-500">
+                      {p.cantidad} {p.unidad} · Dificultad {dificultadLabel(p.dificultad)}
+                    </p>
+                    {p.observaciones && (
+                      <p className="mt-2 text-slate-600">{p.observaciones}</p>
+                    )}
+                    {p.fotos.length > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {p.fotos.map((foto, fi) => (
+                          <img
+                            key={fi}
+                            src={foto}
+                            alt={`${area.nombre} partida ${i + 1} foto ${fi + 1}`}
+                            className="aspect-square rounded-lg object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {p.tipoTrabajo === "Proyecto fotovoltaico" && p.fotovoltaico && (
+                      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {p.fotovoltaico.tipoProyecto && (
+                          <div>
+                            <dt className="text-slate-500">Tipo de proyecto</dt>
+                            <dd className="capitalize">{p.fotovoltaico.tipoProyecto}</dd>
+                          </div>
+                        )}
+                        {p.fotovoltaico.capacidadEstimadaKw != null && (
+                          <div>
+                            <dt className="text-slate-500">Capacidad estimada</dt>
+                            <dd>{p.fotovoltaico.capacidadEstimadaKw} kW</dd>
+                          </div>
+                        )}
+                        {p.fotovoltaico.numeroPaneles != null && (
+                          <div>
+                            <dt className="text-slate-500">Paneles estimados</dt>
+                            <dd>{p.fotovoltaico.numeroPaneles}</dd>
+                          </div>
+                        )}
+                      </dl>
+                    )}
                   </div>
-                )}
-                {p.tipoTrabajo === "Proyecto fotovoltaico" && p.fotovoltaico && (
-                  <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {p.fotovoltaico.tipoProyecto && (
-                      <div>
-                        <dt className="text-slate-500">Tipo de proyecto</dt>
-                        <dd className="capitalize">{p.fotovoltaico.tipoProyecto}</dd>
-                      </div>
-                    )}
-                    {p.fotovoltaico.capacidadEstimadaKw != null && (
-                      <div>
-                        <dt className="text-slate-500">Capacidad estimada</dt>
-                        <dd>{p.fotovoltaico.capacidadEstimadaKw} kW</dd>
-                      </div>
-                    )}
-                    {p.fotovoltaico.numeroPaneles != null && (
-                      <div>
-                        <dt className="text-slate-500">Paneles estimados</dt>
-                        <dd>{p.fotovoltaico.numeroPaneles}</dd>
-                      </div>
-                    )}
-                  </dl>
-                )}
+                ))}
               </div>
             ))}
           </div>

@@ -103,6 +103,7 @@ function normalizePayload(payload: SyncPayload): SyncPayload {
       return {
         ...revived,
         partidas: revived.partidas ?? [],
+        areas: revived.areas ?? [],
         fotosGenerales: revived.fotosGenerales ?? {},
         fotos: revived.fotos ?? [],
       };

@@ -118,6 +118,7 @@ function migrateSurveysTable(db: Database.Database) {
     ["observacionesGenerales", "TEXT"],
     ["partidas", "TEXT NOT NULL DEFAULT '[]'"],
     ["fotosGenerales", "TEXT NOT NULL DEFAULT '{}'"],
+    ["areas", "TEXT NOT NULL DEFAULT '[]'"],
   ];
 
   for (const [name, definition] of additions) {
@@ -158,6 +159,7 @@ function surveyToBindParams(survey: Survey) {
     observacionesGenerales: survey.observacionesGenerales ?? null,
     notas: survey.notas ?? null,
     partidas: JSON.stringify(survey.partidas ?? []),
+    areas: JSON.stringify(survey.areas ?? []),
     fotosGenerales: JSON.stringify(survey.fotosGenerales ?? {}),
     fotos: JSON.stringify(survey.fotos ?? []),
     createdAt: toIso(survey.createdAt),
@@ -218,6 +220,7 @@ function rowToSurvey(row: Record<string, unknown>): Survey {
     observacionesGenerales: (row.observacionesGenerales as string) || undefined,
     notas: (row.notas as string) || undefined,
     partidas: parseJsonField(row.partidas, []),
+    areas: parseJsonField(row.areas, []),
     fotosGenerales: parseJsonField(row.fotosGenerales, {}),
     fotos: parseJsonField(row.fotos, []),
     createdAt: parseDate(row.createdAt as string),
@@ -412,12 +415,12 @@ export function mergeLocalData(input: MergeInput) {
         clientId, titulo, fecha, direccionObra, estado, tipoInstalacion, voltaje,
         numCircuitos, metrosCable, numContactos, numLuminarias, requiereTablero,
         capacidadInterruptorPrincipal, espaciosTablero, sistemaTierraFisica, observacionesGenerales,
-        notas, partidas, fotosGenerales, fotos, createdAt, updatedAt
+        notas, partidas, areas, fotosGenerales, fotos, createdAt, updatedAt
       ) VALUES (
         @clientId, @titulo, @fecha, @direccionObra, @estado, @tipoInstalacion, @voltaje,
         @numCircuitos, @metrosCable, @numContactos, @numLuminarias, @requiereTablero,
         @capacidadInterruptorPrincipal, @espaciosTablero, @sistemaTierraFisica, @observacionesGenerales,
-        @notas, @partidas, @fotosGenerales, @fotos, @createdAt, @updatedAt
+        @notas, @partidas, @areas, @fotosGenerales, @fotos, @createdAt, @updatedAt
       )
     `);
 
@@ -636,7 +639,7 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
             metrosCable=@metrosCable, numContactos=@numContactos, numLuminarias=@numLuminarias,
             requiereTablero=@requiereTablero, capacidadInterruptorPrincipal=@capacidadInterruptorPrincipal,
             espaciosTablero=@espaciosTablero, sistemaTierraFisica=@sistemaTierraFisica,
-            observacionesGenerales=@observacionesGenerales, notas=@notas, partidas=@partidas,
+            observacionesGenerales=@observacionesGenerales, notas=@notas, partidas=@partidas, areas=@areas,
             fotosGenerales=@fotosGenerales, fotos=@fotos, updatedAt=@updatedAt WHERE id=@id
           `).run(bind),
         () =>
@@ -645,12 +648,12 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
               id, clientId, titulo, fecha, direccionObra, estado, tipoInstalacion, voltaje,
               numCircuitos, metrosCable, numContactos, numLuminarias, requiereTablero,
               capacidadInterruptorPrincipal, espaciosTablero, sistemaTierraFisica, observacionesGenerales,
-              notas, partidas, fotosGenerales, fotos, createdAt, updatedAt
+              notas, partidas, areas, fotosGenerales, fotos, createdAt, updatedAt
             ) VALUES (
               @id, @clientId, @titulo, @fecha, @direccionObra, @estado, @tipoInstalacion, @voltaje,
               @numCircuitos, @metrosCable, @numContactos, @numLuminarias, @requiereTablero,
               @capacidadInterruptorPrincipal, @espaciosTablero, @sistemaTierraFisica, @observacionesGenerales,
-              @notas, @partidas, @fotosGenerales, @fotos, @createdAt, @updatedAt
+              @notas, @partidas, @areas, @fotosGenerales, @fotos, @createdAt, @updatedAt
             )
           `).run(bind),
       );
@@ -662,12 +665,12 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
         clientId, titulo, fecha, direccionObra, estado, tipoInstalacion, voltaje,
         numCircuitos, metrosCable, numContactos, numLuminarias, requiereTablero,
         capacidadInterruptorPrincipal, espaciosTablero, sistemaTierraFisica, observacionesGenerales,
-        notas, partidas, fotosGenerales, fotos, createdAt, updatedAt
+        notas, partidas, areas, fotosGenerales, fotos, createdAt, updatedAt
       ) VALUES (
         @clientId, @titulo, @fecha, @direccionObra, @estado, @tipoInstalacion, @voltaje,
         @numCircuitos, @metrosCable, @numContactos, @numLuminarias, @requiereTablero,
         @capacidadInterruptorPrincipal, @espaciosTablero, @sistemaTierraFisica, @observacionesGenerales,
-        @notas, @partidas, @fotosGenerales, @fotos, @createdAt, @updatedAt
+        @notas, @partidas, @areas, @fotosGenerales, @fotos, @createdAt, @updatedAt
       )
     `).run(surveyToBindParams(r));
     return rowToSurvey(

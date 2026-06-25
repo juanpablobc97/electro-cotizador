@@ -1,4 +1,4 @@
-import type { PhotovoltaicData, SurveyWorkItem, WorkDifficulty } from "./types";
+import type { PhotovoltaicData, Survey, SurveyArea, SurveyWorkItem, WorkDifficulty } from "./types";
 
 export const TIPOS_TRABAJO = [
   "Instalación de cargador EV",
@@ -70,11 +70,11 @@ export function createEmptyPhotovoltaic(): PhotovoltaicData {
   };
 }
 
-export function createEmptyWorkItem(): SurveyWorkItem {
+export function createEmptyWorkItem(areaNombre = ""): SurveyWorkItem {
   return {
     id: crypto.randomUUID(),
     tipoTrabajo: "Otro",
-    area: "",
+    area: areaNombre,
     cantidad: 1,
     unidad: "pza",
     descripcion: "",
@@ -160,4 +160,42 @@ export async function readFilesAsDataUrls(files: FileList | File[]): Promise<str
     results.push(dataUrl);
   }
   return results;
+}
+
+export function createEmptyArea(): SurveyArea {
+  return {
+    id: crypto.randomUUID(),
+    nombre: "",
+    partidas: [],
+  };
+}
+
+export function flattenAreasToPartidas(areas: SurveyArea[]): SurveyWorkItem[] {
+  return areas.flatMap((area) =>
+    area.partidas.map((partida) => ({
+      ...partida,
+      area: area.nombre,
+    })),
+  );
+}
+
+export function getSurveyAreas(survey: Pick<Survey, "areas" | "partidas">): SurveyArea[] {
+  if (survey.areas?.length) return survey.areas;
+
+  const partidas = survey.partidas ?? [];
+  if (partidas.length === 0) return [];
+
+  const grouped = new Map<string, SurveyWorkItem[]>();
+  for (const partida of partidas) {
+    const nombre = partida.area?.trim() || "General";
+    const list = grouped.get(nombre) ?? [];
+    list.push(partida);
+    grouped.set(nombre, list);
+  }
+
+  return Array.from(grouped.entries()).map(([nombre, items]) => ({
+    id: crypto.randomUUID(),
+    nombre,
+    partidas: items,
+  }));
 }

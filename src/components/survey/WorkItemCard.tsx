@@ -19,19 +19,22 @@ import { PhotoField } from "./PhotoField";
 export function WorkItemCard({
   item,
   index,
+  areaNombre = "",
   onChange,
   onRemove,
 }: {
   item: SurveyWorkItem;
   index: number;
+  areaNombre?: string;
   onChange: (item: SurveyWorkItem) => void;
   onRemove: () => void;
 }) {
   function update(patch: Partial<SurveyWorkItem>) {
-    let next = { ...item, ...patch };
+    let next = { ...item, ...patch, area: areaNombre || item.area };
 
     if (patch.tipoTrabajo) {
       next = applyTipoTrabajoDefaults(next, patch.tipoTrabajo as TipoTrabajo);
+      next.area = areaNombre || next.area;
     } else if (!next.descripcionManual) {
       next.descripcion = generateWorkDescription(next);
     }
@@ -40,7 +43,7 @@ export function WorkItemCard({
   }
 
   function updateFotovoltaico(fotovoltaico: NonNullable<SurveyWorkItem["fotovoltaico"]>) {
-    const next = { ...item, fotovoltaico };
+    const next = { ...item, fotovoltaico, area: areaNombre || item.area };
     if (!next.descripcionManual) {
       next.descripcion = generateWorkDescription(next);
     }
@@ -64,12 +67,6 @@ export function WorkItemCard({
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          label="Área / ubicación"
-          value={item.area}
-          onChange={(e) => update({ area: e.target.value })}
-          placeholder="Cocina, fachada, cochera..."
-        />
         <Input
           label="Cantidad *"
           type="number"

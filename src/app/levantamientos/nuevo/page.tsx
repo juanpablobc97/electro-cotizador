@@ -2,55 +2,85 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
-import type { GeneralPhotos, SurveyWorkItem } from "@/lib/types";
-import { createEmptyWorkItem } from "@/lib/survey-work";
+import type { GeneralPhotos, SurveyArea } from "@/lib/types";
+import { createEmptyArea, flattenAreasToPartidas } from "@/lib/survey-work";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { AreaCard } from "@/components/survey/AreaCard";
 import { FormSection } from "@/components/survey/FormSection";
 import { GeneralPhotosSection } from "@/components/survey/GeneralPhotosSection";
+import { ObraDireccionField } from "@/components/survey/ObraDireccionField";
 import { SurveySummaryTable } from "@/components/survey/SurveySummaryTable";
-import { WorkItemCard } from "@/components/survey/WorkItemCard";
 
 function NuevoLevantamientoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId") ?? "";
   const [saving, setSaving] = useState(false);
-  const [partidas, setPartidas] = useState<SurveyWorkItem[]>([]);
+  const [clientId, setClientId] = useState(preselectedClientId);
+  const [direccionModo, setDireccionModo] = useState<"cliente" | "otra">("cliente");
+  const [direccionObra, setDireccionObra] = useState("");
+  const [areas, setAreas] = useState<SurveyArea[]>([]);
   const [fotosGenerales, setFotosGenerales] = useState<GeneralPhotos>({});
 
   const clients = useLiveQuery(() => db.clients.orderBy("nombre").toArray()) ?? [];
+  const selectedClient = clients.find((c) => String(c.id) === clientId);
+  const partidasResumen = flattenAreasToPartidas(areas);
 
-  function addPartida() {
-    setPartidas((prev) => [...prev, createEmptyWorkItem()]);
+  useEffect(() => {
+    if (!selectedClient) return;
+    if (direccionModo === "cliente") {
+      setDireccionObra(selectedClient.direccion);
+    }
+  }, [selectedClient, direccionModo]);
+
+  function handleClientChange(value: string) {
+    setClientId(value);
+    const client = clients.find((c) => String(c.id) === value);
+    if (client && direccionModo === "cliente") {
+      setDireccionObra(client.direccion);
+    }
   }
 
-  function updatePartida(index: number, item: SurveyWorkItem) {
-    setPartidas((prev) => prev.map((p, i) => (i === index ? item : p)));
+  function handleDireccionModoChange(modo: "cliente" | "otra") {
+    setDireccionModo(modo);
+    if (modo === "cliente" && selectedClient) {
+      setDireccionObra(selectedClient.direccion);
+    }
   }
 
-  function removePartida(index: number) {
-    setPartidas((prev) => prev.filter((_, i) => i !== index));
+  function addArea() {
+    setAreas((prev) => [...prev, createEmptyArea()]);
+  }
+
+  function updateArea(index: number, area: SurveyArea) {
+    setAreas((prev) => prev.map((a, i) => (i === index ? area : a)));
+  }
+
+  function removeArea(index: number) {
+    setAreas((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!direccionObra.trim()) return;
     setSaving(true);
 
     const form = new FormData(e.currentTarget);
     const now = new Date();
+    const partidas = flattenAreasToPartidas(areas);
 
     const id = await dataStore.surveys.create({
       clientId: Number(form.get("clientId")),
       titulo: String(form.get("titulo")),
       fecha: new Date(String(form.get("fecha"))),
-      direccionObra: String(form.get("direccionObra")),
+      direccionObra: direccionObra.trim(),
       estado: form.get("estado") as "borrador" | "completado",
       tipoInstalacion: String(form.get("tipoInstalacion")),
       voltaje: String(form.get("voltaje")),
@@ -59,6 +89,7 @@ function NuevoLevantamientoForm() {
       numContactos: 0,
       numLuminarias: 0,
       requiereTablero: false,
+      areas,
       partidas,
       fotosGenerales,
       fotos: [],
@@ -87,7 +118,7 @@ function NuevoLevantamientoForm() {
     <Card>
       <CardHeader
         title="Nuevo levantamiento"
-        subtitle="Captura por partidas cotizables — datos del sitio y trabajos a efectuar"
+        subtitle="Captura por áreas y partidas cotizables"
       />
       <form onSubmit={handleSubmit} className="space-y-6">
         <FormSection title="1. Datos del cliente y obra">
@@ -95,7 +126,8 @@ function NuevoLevantamientoForm() {
             label="Cliente *"
             name="clientId"
             required
-            defaultValue={preselectedClientId}
+            value={clientId}
+            onChange={(e) => handleClientChange(e.target.value)}
             options={[
               { value: "", label: "Seleccionar cliente..." },
               ...clients.map((c) => ({ value: String(c.id), label: c.nombre })),
@@ -109,7 +141,13 @@ function NuevoLevantamientoForm() {
             required
             defaultValue={new Date().toISOString().slice(0, 10)}
           />
-          <Input label="Dirección de obra *" name="direccionObra" required />
+          <ObraDireccionField
+            modo={direccionModo}
+            direccion={direccionObra}
+            direccionCliente={selectedClient?.direccion ?? ""}
+            onModoChange={handleDireccionModoChange}
+            onDireccionChange={setDireccionObra}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
               label="Tipo de instalación"
@@ -142,26 +180,26 @@ function NuevoLevantamientoForm() {
         </FormSection>
 
         <FormSection
-          title="2. Trabajos a efectuar"
-          subtitle="Cada trabajo se guarda como una partida cotizable"
+          title="2. Áreas / ubicación y trabajos"
+          subtitle="Agrega cada zona de la obra y los trabajos que corresponden"
         >
-          {partidas.length === 0 ? (
-            <p className="text-sm text-slate-500">Aún no hay trabajos agregados.</p>
+          {areas.length === 0 ? (
+            <p className="text-sm text-slate-500">Aún no hay áreas agregadas.</p>
           ) : (
             <div className="space-y-4">
-              {partidas.map((item, index) => (
-                <WorkItemCard
-                  key={item.id}
-                  item={item}
+              {areas.map((area, index) => (
+                <AreaCard
+                  key={area.id}
+                  area={area}
                   index={index}
-                  onChange={(updated) => updatePartida(index, updated)}
-                  onRemove={() => removePartida(index)}
+                  onChange={(updated) => updateArea(index, updated)}
+                  onRemove={() => removeArea(index)}
                 />
               ))}
             </div>
           )}
-          <Button type="button" variant="secondary" onClick={addPartida}>
-            + Agregar trabajo
+          <Button type="button" variant="secondary" onClick={addArea}>
+            + Agregar área / ubicación
           </Button>
         </FormSection>
 
@@ -173,11 +211,11 @@ function NuevoLevantamientoForm() {
         </FormSection>
 
         <FormSection title="4. Resumen para cotización">
-          <SurveySummaryTable partidas={partidas} />
+          <SurveySummaryTable partidas={partidasResumen} />
         </FormSection>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving || !clientId || !direccionObra.trim()}>
             {saving ? "Guardando..." : "Guardar levantamiento"}
           </Button>
           <Button type="button" variant="secondary" onClick={() => router.back()}>
