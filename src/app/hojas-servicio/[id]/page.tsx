@@ -12,6 +12,7 @@ import {
   getServiceSheetEmailSubject,
 } from "@/lib/share-pdf";
 import { SERVICE_TYPE_LABELS, formatDate } from "@/lib/utils";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 
@@ -19,6 +20,7 @@ export default function HojaServicioDetallePage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params.id);
+  const { permissions } = useSession();
 
   const sheet = useLiveQuery(() => db.serviceSheets.get(id), [id]);
   const client = useLiveQuery(
@@ -53,9 +55,11 @@ export default function HojaServicioDetallePage() {
           title={sheet.numero}
           subtitle={`${client.nombre} · ${formatDate(sheet.fecha)}`}
           action={
-            <Button size="sm" variant="danger" onClick={handleDelete}>
-              Eliminar
-            </Button>
+            permissions?.canDelete ? (
+              <Button size="sm" variant="danger" onClick={handleDelete}>
+                Eliminar
+              </Button>
+            ) : undefined
           }
         />
 

@@ -7,6 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import { formatDate, SERVICE_TYPE_LABELS } from "@/lib/utils";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -18,6 +19,7 @@ export default function ClienteDetallePage() {
   const id = Number(params.id);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { permissions } = useSession();
 
   const client = useLiveQuery(() => db.clients.get(id), [id]);
   const surveys = useLiveQuery(
@@ -74,9 +76,11 @@ export default function ClienteDetallePage() {
               <Button size="sm" variant="secondary" onClick={() => setEditing(!editing)}>
                 {editing ? "Cancelar" : "Editar"}
               </Button>
-              <Button size="sm" variant="danger" onClick={handleDelete}>
-                Eliminar
-              </Button>
+              {permissions?.canDelete && (
+                <Button size="sm" variant="danger" onClick={handleDelete}>
+                  Eliminar
+                </Button>
+              )}
             </div>
           }
         />

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import { formatDate } from "@/lib/utils";
 import { GENERAL_PHOTO_CATEGORIES, DIFICULTAD_OPTIONS, getSurveyAreas } from "@/lib/survey-work";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { SurveySummaryTable } from "@/components/survey/SurveySummaryTable";
@@ -19,6 +20,7 @@ export default function LevantamientoDetallePage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params.id);
+  const { permissions } = useSession();
 
   const survey = useLiveQuery(() => db.surveys.get(id), [id]);
   const client = useLiveQuery(
@@ -51,9 +53,11 @@ export default function LevantamientoDetallePage() {
               <Link href={`/cotizaciones/nuevo?surveyId=${id}&clientId=${survey.clientId}`}>
                 <Button size="sm">Crear cotización</Button>
               </Link>
-              <Button size="sm" variant="danger" onClick={handleDelete}>
-                Eliminar
-              </Button>
+              {permissions?.canDelete && (
+                <Button size="sm" variant="danger" onClick={handleDelete}>
+                  Eliminar
+                </Button>
+              )}
             </div>
           }
         />

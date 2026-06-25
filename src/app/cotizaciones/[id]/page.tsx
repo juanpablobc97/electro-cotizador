@@ -9,6 +9,7 @@ import { dataStore } from "@/lib/sync";
 import { generateQuotePdfBlob } from "@/lib/pdf";
 import { buildQuoteMessage, getQuoteEmailSubject } from "@/lib/share-pdf";
 import { calculateQuoteTotals, formatCurrency, formatDate, laborImporte, normalizeLaborItem } from "@/lib/utils";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
@@ -17,6 +18,7 @@ export default function CotizacionDetallePage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params.id);
+  const { permissions } = useSession();
 
   const quote = useLiveQuery(() => db.quotes.get(id), [id]);
   const client = useLiveQuery(
@@ -61,9 +63,11 @@ export default function CotizacionDetallePage() {
                   Crear hoja de servicio
                 </Button>
               </Link>
-              <Button size="sm" variant="danger" onClick={handleDelete}>
-                Eliminar
-              </Button>
+              {permissions?.canDelete && (
+                <Button size="sm" variant="danger" onClick={handleDelete}>
+                  Eliminar
+                </Button>
+              )}
             </div>
           }
         />

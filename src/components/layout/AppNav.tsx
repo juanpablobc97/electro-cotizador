@@ -4,12 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LOGO_PATH } from "@/lib/branding";
+import { useSession } from "@/hooks/useSession";
 import { CompanyContact } from "@/components/CompanyContact";
 import { SyncStatusBadge } from "@/components/SyncStatusBadge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const baseNavItems = [
   { href: "/", label: "Inicio", icon: "🏠" },
   { href: "/clientes", label: "Clientes", icon: "👥" },
   { href: "/levantamientos", label: "Levantamientos", icon: "📋" },
@@ -18,9 +19,18 @@ const navItems = [
   { href: "/catalogo", label: "Catálogo", icon: "📦" },
 ];
 
+const accountNavItem = { href: "/perfil", label: "Mi cuenta", icon: "👤" };
+const adminNavItem = { href: "/colaboradores", label: "Colaboradores", icon: "👷" };
+
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const { role, loading } = useSession();
+
+  const items =
+    role === "admin"
+      ? [...baseNavItems, accountNavItem, adminNavItem]
+      : [...baseNavItems, accountNavItem];
 
   async function handleLogout() {
     await fetch("/api/auth", {
@@ -31,6 +41,8 @@ export function AppNav() {
     router.push("/login");
     router.refresh();
   }
+
+  const gridCols = items.length <= 6 ? "grid-cols-6" : "grid-cols-4";
 
   return (
     <>
@@ -62,8 +74,8 @@ export function AppNav() {
       </header>
 
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-brand-navy-light bg-brand-navy md:hidden">
-        <div className="grid grid-cols-6">
-          {navItems.map((item) => {
+        <div className={cn("grid", gridCols)}>
+          {items.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
@@ -94,24 +106,25 @@ export function AppNav() {
           />
         </Link>
         <div className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {navItems.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-brand-gold/15 text-brand-gold"
-                    : "text-white/70 hover:bg-white/5 hover:text-white",
-                )}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </Link>
-            );
-          })}
+          {!loading &&
+            items.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-brand-gold/15 text-brand-gold"
+                      : "text-white/70 hover:bg-white/5 hover:text-white",
+                  )}
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            })}
         </div>
         <div className="border-t border-brand-navy-light px-4 py-4 space-y-3">
           <CompanyContact variant="dark" compact />

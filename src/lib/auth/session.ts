@@ -3,10 +3,15 @@ const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
 
 export { SESSION_COOKIE, SESSION_MAX_AGE_SEC };
 
+/** Lee env en runtime (evita que Next.js la inlined vacía en el build de Railway). */
+function env(name: string): string | undefined {
+  return process.env[name];
+}
+
 export function getAuthSecret(): string {
-  const secret = process.env.AUTH_SECRET;
+  const secret = env("AUTH_SECRET");
   if (secret) return secret;
-  if (process.env.NODE_ENV === "development") return "dev-secret-change-me";
+  if (env("NODE_ENV") === "development") return "dev-secret-change-me";
   throw new Error("AUTH_SECRET is required in production");
 }
 
@@ -41,7 +46,7 @@ export async function verifySessionToken(token: string, secret: string): Promise
 export function getSessionCookieOptions(maxAge = SESSION_MAX_AGE_SEC) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: env("NODE_ENV") === "production",
     sameSite: "lax" as const,
     path: "/",
     maxAge,

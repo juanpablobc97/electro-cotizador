@@ -194,3 +194,31 @@ export type ServiceSheet = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export type UserRole = "admin" | "colaborador";
+
+export type User = {
+  id: number;
+  username: string;
+  role: UserRole;
+  createdAt: Date;
+};
+
+export type Colaborador = {
+  id?: number;
+  nombre: string;
+  puesto: string;
+  sueldo?: number;
+  telefono?: string;
+  email?: string;
+  fechaIngreso?: Date;
+  notas?: string;
+  activo: boolean;
+  userId?: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type ColaboradorWithUser = Colaborador & {
+  username?: string;
+};

@@ -6,12 +6,15 @@ import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import type { MaterialUnit } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
+import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 
 export default function CatalogoPage() {
+  const { permissions } = useSession();
+  const canManage = permissions?.canManageCatalog ?? false;
   const materials = useLiveQuery(() => db.materials.orderBy("categoria").toArray()) ?? [];
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -55,13 +58,15 @@ export default function CatalogoPage() {
           title="Catálogo de materiales"
           subtitle="Precios reutilizables para cotizaciones"
           action={
-            <Button onClick={() => setShowForm(!showForm)}>
-              {showForm ? "Cancelar" : "+ Agregar"}
-            </Button>
+            canManage ? (
+              <Button onClick={() => setShowForm(!showForm)}>
+                {showForm ? "Cancelar" : "+ Agregar"}
+              </Button>
+            ) : undefined
           }
         />
 
-        {showForm && (
+        {canManage && showForm && (
           <form onSubmit={handleSubmit} className="mb-6 space-y-4 rounded-lg border bg-slate-50 p-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Código" name="codigo" required placeholder="CAB-THW12" />
@@ -118,13 +123,15 @@ export default function CatalogoPage() {
                           {material.unidad}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(material.id!)}
-                      >
-                        Eliminar
-                      </Button>
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDelete(material.id!)}
+                        >
+                          Eliminar
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
