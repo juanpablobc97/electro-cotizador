@@ -50,9 +50,9 @@ export default function LevantamientosPage() {
                       {clientMap.get(survey.clientId) ?? "Cliente"} · {survey.direccionObra}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {survey.numCircuitos} circuitos · {survey.metrosCable} m cable ·{" "}
                       {(survey.partidas?.length ?? 0)} partida
                       {(survey.partidas?.length ?? 0) !== 1 ? "s" : ""}
+                      {survey.estado === "completado" ? " · completado" : ""}
                     </p>
                   </div>
                   <div className="text-right">

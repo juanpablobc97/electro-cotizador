@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
+import {
+  buildLaborFromSurvey,
+  buildMaterialsFromSurvey,
+  buildNotesFromSurvey,
+} from "@/lib/quote-from-survey";
 import type { MaterialUnit, QuoteLaborItem, QuoteMaterialItem } from "@/lib/types";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
@@ -21,9 +26,14 @@ function NuevaCotizacionForm() {
   const preselectedSurveyId = searchParams.get("surveyId") ?? "";
   const [saving, setSaving] = useState(false);
   const [materiales, setMateriales] = useState<QuoteMaterialItem[]>([]);
-  const [manoObra, setManoObra] = useState<QuoteLaborItem[]>([
-    { descripcion: "Instalación eléctrica", horas: 8, tarifaHora: 350 },
-  ]);
+  const [manoObra, setManoObra] = useState<QuoteLaborItem[]>(
+    preselectedSurveyId
+      ? []
+      : [{ descripcion: "Instalación eléctrica", horas: 8, tarifaHora: 350 }],
+  );
+  const [notas, setNotas] = useState("");
+  const seededSurveyId = useRef<number | null>(null);
+  const seededMaterialsFor = useRef<number | null>(null);
 
   const clients = useLiveQuery(() => db.clients.orderBy("nombre").toArray()) ?? [];
   const catalog = useLiveQuery(() => db.materials.orderBy("nombre").toArray()) ?? [];
@@ -31,6 +41,23 @@ function NuevaCotizacionForm() {
     () => (preselectedSurveyId ? db.surveys.get(Number(preselectedSurveyId)) : undefined),
     [preselectedSurveyId],
   );
+
+  useEffect(() => {
+    if (!survey?.id || !preselectedSurveyId) return;
+    if (seededSurveyId.current === survey.id) return;
+    seededSurveyId.current = survey.id;
+
+    setManoObra(buildLaborFromSurvey(survey));
+    setNotas(buildNotesFromSurvey(survey));
+  }, [survey, preselectedSurveyId]);
+
+  useEffect(() => {
+    if (!survey?.id || !preselectedSurveyId || catalog.length === 0) return;
+    if (seededMaterialsFor.current === survey.id) return;
+    seededMaterialsFor.current = survey.id;
+
+    setMateriales(buildMaterialsFromSurvey(survey, catalog));
+  }, [survey, catalog, preselectedSurveyId]);
 
   function addMaterialFromCatalog(materialId: string) {
     const material = catalog.find((m) => m.id === Number(materialId));
@@ -95,7 +122,7 @@ function NuevaCotizacionForm() {
       validezDias: Number(form.get("validezDias")),
       materiales,
       manoObra,
-      notas: String(form.get("notas") || "") || undefined,
+      notas: notas.trim() || undefined,
       ivaPorcentaje: Number(form.get("ivaPorcentaje")),
       estado: "borrador",
       createdAt: now,
@@ -138,9 +165,16 @@ function NuevaCotizacionForm() {
             <input type="hidden" name="surveyId" value={preselectedSurveyId} />
           )}
           {survey && (
-            <p className="rounded-lg bg-brand-gold-light p-3 text-sm text-brand-navy">
-              Basada en levantamiento: <strong>{survey.titulo}</strong> ({survey.direccionObra})
-            </p>
+            <div className="rounded-lg bg-brand-gold-light p-3 text-sm text-brand-navy space-y-1">
+              <p>
+                Basada en levantamiento: <strong>{survey.titulo}</strong> ({survey.direccionObra})
+              </p>
+              {(survey.partidas?.length ?? 0) > 0 && (
+                <p className="text-brand-navy/80">
+                  Se precargaron {survey.partidas.length} partida(s) en mano de obra y notas.
+                </p>
+              )}
+            </div>
           )}
           <div className="grid gap-4 sm:grid-cols-3">
             <Input
@@ -281,7 +315,13 @@ function NuevaCotizacionForm() {
       </Card>
 
       <Card>
-        <Textarea label="Notas" name="notas" placeholder="Condiciones, tiempos de entrega, forma de pago..." />
+        <Textarea
+          label="Notas"
+          name="notas"
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          placeholder="Condiciones, tiempos de entrega, forma de pago..."
+        />
         <div className="mt-4 flex gap-3">
           <Button type="submit" disabled={saving}>
             {saving ? "Guardando..." : "Guardar cotización"}

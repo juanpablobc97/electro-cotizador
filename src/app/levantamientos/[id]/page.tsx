@@ -76,55 +76,6 @@ export default function LevantamientoDetallePage() {
             <dd className="font-medium">{survey.voltaje}</dd>
           </div>
         </dl>
-
-        <h3 className="mb-3 mt-6 text-sm font-semibold text-slate-800">Datos técnicos generales</h3>
-        <dl className="grid gap-4 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-slate-500">Circuitos</dt>
-            <dd className="font-medium">{survey.numCircuitos}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Metros de cable</dt>
-            <dd className="font-medium">{survey.metrosCable} m</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Contactos</dt>
-            <dd className="font-medium">{survey.numContactos}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Luminarias</dt>
-            <dd className="font-medium">{survey.numLuminarias}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Tablero de distribución</dt>
-            <dd className="font-medium">{survey.requiereTablero ? "Sí" : "No"}</dd>
-          </div>
-          {survey.capacidadInterruptorPrincipal && (
-            <div>
-              <dt className="text-slate-500">Interruptor principal</dt>
-              <dd className="font-medium">{survey.capacidadInterruptorPrincipal}</dd>
-            </div>
-          )}
-          {survey.espaciosTablero != null && (
-            <div>
-              <dt className="text-slate-500">Espacios en tablero</dt>
-              <dd className="font-medium">{survey.espaciosTablero}</dd>
-            </div>
-          )}
-          {survey.sistemaTierraFisica != null && (
-            <div>
-              <dt className="text-slate-500">Tierra física</dt>
-              <dd className="font-medium">{survey.sistemaTierraFisica ? "Sí" : "No"}</dd>
-            </div>
-          )}
-        </dl>
-
-        {(survey.observacionesGenerales || survey.notas) && (
-          <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
-            <p className="font-medium text-slate-700">Observaciones generales</p>
-            <p className="mt-1 text-slate-600">{survey.observacionesGenerales || survey.notas}</p>
-          </div>
-        )}
       </Card>
 
       {partidas.length > 0 && (

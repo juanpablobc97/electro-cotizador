@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { Textarea } from "@/components/ui/Textarea";
 import { FormSection } from "@/components/survey/FormSection";
 import { GeneralPhotosSection } from "@/components/survey/GeneralPhotosSection";
 import { SurveySummaryTable } from "@/components/survey/SurveySummaryTable";
@@ -46,7 +45,6 @@ function NuevoLevantamientoForm() {
 
     const form = new FormData(e.currentTarget);
     const now = new Date();
-    const sistemaTierra = form.get("sistemaTierraFisica");
 
     const id = await dataStore.surveys.create({
       clientId: Number(form.get("clientId")),
@@ -56,18 +54,11 @@ function NuevoLevantamientoForm() {
       estado: form.get("estado") as "borrador" | "completado",
       tipoInstalacion: String(form.get("tipoInstalacion")),
       voltaje: String(form.get("voltaje")),
-      numCircuitos: Number(form.get("numCircuitos")),
-      metrosCable: Number(form.get("metrosCable")),
-      numContactos: Number(form.get("numContactos")),
-      numLuminarias: Number(form.get("numLuminarias")),
-      requiereTablero: form.get("requiereTablero") === "on",
-      capacidadInterruptorPrincipal: String(form.get("capacidadInterruptorPrincipal") || "") || undefined,
-      espaciosTablero: form.get("espaciosTablero")
-        ? Number(form.get("espaciosTablero"))
-        : undefined,
-      sistemaTierraFisica:
-        sistemaTierra === "si" ? true : sistemaTierra === "no" ? false : undefined,
-      observacionesGenerales: String(form.get("observacionesGenerales") || "") || undefined,
+      numCircuitos: 0,
+      metrosCable: 0,
+      numContactos: 0,
+      numLuminarias: 0,
+      requiereTablero: false,
       partidas,
       fotosGenerales,
       fotos: [],
@@ -150,46 +141,8 @@ function NuevoLevantamientoForm() {
           />
         </FormSection>
 
-        <FormSection title="2. Datos técnicos generales">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="No. de circuitos" name="numCircuitos" type="number" min={0} defaultValue={0} />
-            <Input label="Metros de cable" name="metrosCable" type="number" min={0} defaultValue={0} />
-            <Input label="Contactos" name="numContactos" type="number" min={0} defaultValue={0} />
-            <Input label="Luminarias" name="numLuminarias" type="number" min={0} defaultValue={0} />
-            <Input
-              label="Capacidad del interruptor principal"
-              name="capacidadInterruptorPrincipal"
-              placeholder="Ej. 100 A"
-            />
-            <Input
-              label="Espacios disponibles en tablero"
-              name="espaciosTablero"
-              type="number"
-              min={0}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="requiereTablero" className="h-4 w-4 rounded" />
-            Requiere tablero de distribución
-          </label>
-          <Select
-            label="Sistema de tierra física"
-            name="sistemaTierraFisica"
-            options={[
-              { value: "", label: "No especificado" },
-              { value: "si", label: "Sí" },
-              { value: "no", label: "No" },
-            ]}
-          />
-          <Textarea
-            label="Observaciones generales"
-            name="observacionesGenerales"
-            placeholder="Condiciones del sitio, accesos, riesgos..."
-          />
-        </FormSection>
-
         <FormSection
-          title="3. Trabajos a efectuar"
+          title="2. Trabajos a efectuar"
           subtitle="Cada trabajo se guarda como una partida cotizable"
         >
           {partidas.length === 0 ? (
@@ -213,13 +166,13 @@ function NuevoLevantamientoForm() {
         </FormSection>
 
         <FormSection
-          title="4. Evidencia fotográfica general"
+          title="3. Evidencia fotográfica general"
           subtitle="Fotos del sitio separadas de las fotos por partida"
         >
           <GeneralPhotosSection fotosGenerales={fotosGenerales} onChange={setFotosGenerales} />
         </FormSection>
 
-        <FormSection title="5. Resumen para cotización">
+        <FormSection title="4. Resumen para cotización">
           <SurveySummaryTable partidas={partidas} />
         </FormSection>
 
