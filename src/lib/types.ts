@@ -89,6 +89,12 @@ export type SurveyWorkItem = {
   fotovoltaico?: PhotovoltaicData;
 };
 
+export type SurveyArea = {
+  id: string;
+  nombre: string;
+  partidas: SurveyWorkItem[];
+};
+
 export type Survey = {
   id?: number;
   clientId: number;
@@ -108,6 +114,7 @@ export type Survey = {
   sistemaTierraFisica?: boolean;
   observacionesGenerales?: string;
   notas?: string;
+  areas: SurveyArea[];
   partidas: SurveyWorkItem[];
   fotosGenerales: GeneralPhotos;
   fotos: string[];
