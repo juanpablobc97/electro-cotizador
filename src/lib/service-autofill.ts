@@ -14,7 +14,6 @@ export type ServiceAutofillData = {
   descripcionTrabajo: string;
   materiales: ServiceMaterialItem[];
   tipoServicio: ServiceType;
-  notas?: string;
 };
 
 export async function buildServiceDataFromQuote(
@@ -30,7 +29,7 @@ export async function buildServiceDataFromQuote(
     clientId: quote.clientId,
     quoteId: quote.id,
     direccionServicio: survey?.direccionObra ?? client?.direccion ?? "",
-    descripcionTrabajo: buildDescripcionFromQuote(quote, survey),
+    descripcionTrabajo: buildDescripcionFromQuote(quote),
     materiales: quote.materiales.map((m) => ({
       materialId: m.materialId,
       descripcion: m.descripcion,
@@ -38,21 +37,11 @@ export async function buildServiceDataFromQuote(
       cantidad: m.cantidad,
     })),
     tipoServicio: mapTipoServicio(survey),
-    notas: quote.notas,
   };
 }
 
-function buildDescripcionFromQuote(quote: Quote, survey?: Survey): string {
+function buildDescripcionFromQuote(quote: Quote): string {
   const lineas: string[] = [`Servicio realizado según cotización ${quote.numero}.`];
-
-  if (survey) {
-    lineas.push(
-      "",
-      `Proyecto: ${survey.titulo}`,
-      `Tipo: ${survey.tipoInstalacion} · ${survey.voltaje}`,
-      `${survey.numCircuitos} circuitos · ${survey.metrosCable} m de cable · ${survey.numContactos} contactos · ${survey.numLuminarias} luminarias`,
-    );
-  }
 
   if (quote.manoObra.length > 0) {
     lineas.push("", "Trabajos ejecutados:");

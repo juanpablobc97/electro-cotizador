@@ -65,10 +65,13 @@ function NuevaCotizacionForm() {
 
     let cantidad = 1;
     if (survey) {
-      if (material.categoria === "Cableado") cantidad = survey.metrosCable || 1;
-      if (material.categoria === "Contactos") cantidad = survey.numContactos || 1;
-      if (material.categoria === "Iluminación") cantidad = survey.numLuminarias || 1;
-      if (material.categoria === "Tableros" && survey.requiereTablero) cantidad = 1;
+      const hasPartidas = (survey.partidas?.length ?? 0) > 0;
+      if (!hasPartidas) {
+        if (material.categoria === "Cableado") cantidad = survey.metrosCable || 1;
+        if (material.categoria === "Contactos") cantidad = survey.numContactos || 1;
+        if (material.categoria === "Iluminación") cantidad = survey.numLuminarias || 1;
+        if (material.categoria === "Tableros" && survey.requiereTablero) cantidad = 1;
+      }
     }
 
     setMateriales((prev) => [
@@ -171,7 +174,7 @@ function NuevaCotizacionForm() {
               </p>
               {(survey.partidas?.length ?? 0) > 0 && (
                 <p className="text-brand-navy/80">
-                  Se precargaron {survey.partidas.length} partida(s) en mano de obra y notas.
+                  Se precargaron {survey.partidas.length} partida(s) en mano de obra.
                 </p>
               )}
             </div>

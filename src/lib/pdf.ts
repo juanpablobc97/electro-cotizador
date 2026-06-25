@@ -150,11 +150,7 @@ export async function generateQuotePdfBlob(
   if (survey) {
     doc.text(`Obra: ${survey.direccionObra}`, margin, clientY);
     clientY += 6;
-    doc.text(
-      `Levantamiento: ${survey.titulo} (${survey.numCircuitos} circuitos, ${survey.metrosCable}m cable)`,
-      margin,
-      clientY,
-    );
+    doc.text(`Levantamiento: ${survey.titulo}`, margin, clientY);
     clientY += 6;
   }
 

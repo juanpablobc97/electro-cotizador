@@ -148,31 +148,6 @@ export function buildMaterialsFromSurvey(survey: Survey, catalog: Material[]): Q
   return items;
 }
 
-export function buildNotesFromSurvey(survey: Survey): string {
-  const lines: string[] = [
-    `Obra: ${survey.direccionObra}`,
-    `Instalación ${survey.tipoInstalacion} · ${survey.voltaje}`,
-  ];
-
-  if (survey.observacionesGenerales) lines.push("", survey.observacionesGenerales);
-  else if (survey.notas) lines.push("", survey.notas);
-
-  const partidas = survey.partidas ?? [];
-  if (partidas.length > 0) {
-    lines.push("", "Partidas del levantamiento:");
-    partidas.forEach((partida, index) => {
-      const obs = partida.observaciones ? ` — ${partida.observaciones}` : "";
-      lines.push(
-        `${index + 1}. ${partida.descripcion || partida.tipoTrabajo} (${partida.cantidad} ${partida.unidad}, ${partida.dificultad})${obs}`,
-      );
-    });
-    return lines.join("\n").trim();
-  }
-
-  const tech: string[] = [];
-  if (survey.numCircuitos) tech.push(`${survey.numCircuitos} circuitos`);
-  if (survey.metrosCable) tech.push(`${survey.metrosCable} m cable`);
-  if (tech.length) lines.push(tech.join(" · "));
-
-  return lines.join("\n").trim();
+export function buildNotesFromSurvey(_survey: Survey): string {
+  return "";
 }

@@ -62,7 +62,7 @@ function NuevaHojaServicioForm() {
       setDescripcionTrabajo(data.descripcionTrabajo);
       setMateriales(data.materiales);
       setTipoServicio(data.tipoServicio);
-      if (data.notas) setNotas(data.notas);
+      setNotas("");
     });
   }, [quoteId]);
 
