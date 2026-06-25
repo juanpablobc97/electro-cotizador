@@ -1,31 +1,31 @@
-import type {
-  Material,
-  MaterialUnit,
-  QuoteLaborItem,
-  QuoteMaterialItem,
-  Survey,
-  SurveyWorkItem,
-  WorkDifficulty,
-} from "./types";
+import type { Material, QuoteLaborItem, QuoteMaterialItem, Survey, SurveyWorkItem } from "./types";
 
-const DEFAULT_TARIFA = 350;
+const DEFAULT_TARIFA_UNIDAD = 100;
 
-const HOURS_PER_UNIT: Record<WorkDifficulty, number> = {
-  baja: 1.5,
-  media: 3,
-  alta: 6,
+const TARIFA_POR_TIPO: Record<string, number> = {
+  "Instalación de contacto": 100,
+  "Instalación de contacto especial": 150,
+  "Instalación de apagador": 100,
+  "Instalación de luminaria sencilla/básica": 120,
+  "Instalación de luminaria de lujo": 250,
+  "Instalación de minisplit": 800,
+  "Instalación de cargador EV": 2500,
+  "Centro de carga": 1200,
+  "Instalación de tablero": 1500,
+  "Cableado de circuito": 800,
+  "Canalización en tubería galvanizada": 80,
+  "Canalización PVC": 60,
+  "Ranura en muro": 120,
+  "Ranura en piso": 150,
+  "Tierra física": 1200,
+  "Cambio de interruptor": 100,
+  "Registro eléctrico": 400,
+  "Diagnóstico eléctrico": 500,
+  "Proyecto fotovoltaico": 8000,
 };
 
-function estimateLaborHours(partida: SurveyWorkItem): number {
-  const { cantidad, unidad, dificultad } = partida;
-  const factor = HOURS_PER_UNIT[dificultad] ?? 2;
-
-  if (unidad === "hr") return cantidad || factor;
-  if (unidad === "servicio") return factor * 2;
-  if (unidad === "m") return Math.max(0.5, Number(cantidad) * 0.25);
-  if (unidad === "pza") return Math.max(0.5, Number(cantidad) * factor);
-  if (unidad === "rollo") return Math.max(1, Number(cantidad));
-  return Math.max(0.5, Number(cantidad) || factor);
+function defaultTarifaUnidad(partida: SurveyWorkItem): number {
+  return TARIFA_POR_TIPO[partida.tipoTrabajo] ?? DEFAULT_TARIFA_UNIDAD;
 }
 
 function laborDescription(partida: SurveyWorkItem): string {
@@ -34,14 +34,19 @@ function laborDescription(partida: SurveyWorkItem): string {
   return `${main}${area}`;
 }
 
+function partidaToLabor(partida: SurveyWorkItem): QuoteLaborItem {
+  return {
+    descripcion: laborDescription(partida),
+    cantidad: partida.cantidad || 1,
+    unidad: partida.unidad || "pza",
+    tarifaUnidad: defaultTarifaUnidad(partida),
+  };
+}
+
 export function buildLaborFromSurvey(survey: Survey): QuoteLaborItem[] {
   const partidas = survey.partidas ?? [];
   if (partidas.length > 0) {
-    return partidas.map((partida) => ({
-      descripcion: laborDescription(partida),
-      horas: Math.round(estimateLaborHours(partida) * 10) / 10,
-      tarifaHora: DEFAULT_TARIFA,
-    }));
+    return partidas.map(partidaToLabor);
   }
 
   const items: QuoteLaborItem[] = [];
@@ -49,44 +54,48 @@ export function buildLaborFromSurvey(survey: Survey): QuoteLaborItem[] {
   if (survey.numCircuitos > 0) {
     items.push({
       descripcion: `Cableado de ${survey.numCircuitos} circuito(s)`,
-      horas: survey.numCircuitos * 4,
-      tarifaHora: DEFAULT_TARIFA,
+      cantidad: survey.numCircuitos,
+      unidad: "servicio",
+      tarifaUnidad: TARIFA_POR_TIPO["Cableado de circuito"],
     });
   }
   if (survey.numContactos > 0) {
     items.push({
       descripcion: `Instalación de ${survey.numContactos} contacto(s)`,
-      horas: survey.numContactos * 1.5,
-      tarifaHora: DEFAULT_TARIFA,
+      cantidad: survey.numContactos,
+      unidad: "pza",
+      tarifaUnidad: TARIFA_POR_TIPO["Instalación de contacto"],
     });
   }
   if (survey.numLuminarias > 0) {
     items.push({
       descripcion: `Instalación de ${survey.numLuminarias} luminaria(s)`,
-      horas: survey.numLuminarias * 2,
-      tarifaHora: DEFAULT_TARIFA,
+      cantidad: survey.numLuminarias,
+      unidad: "pza",
+      tarifaUnidad: TARIFA_POR_TIPO["Instalación de luminaria sencilla/básica"],
     });
   }
   if (survey.requiereTablero) {
     items.push({
       descripcion: "Instalación de tablero de distribución",
-      horas: 8,
-      tarifaHora: DEFAULT_TARIFA,
+      cantidad: 1,
+      unidad: "servicio",
+      tarifaUnidad: TARIFA_POR_TIPO["Instalación de tablero"],
     });
   }
 
   if (items.length === 0) {
-    return [{ descripcion: "Instalación eléctrica", horas: 8, tarifaHora: DEFAULT_TARIFA }];
+    return [
+      {
+        descripcion: "Instalación eléctrica",
+        cantidad: 1,
+        unidad: "servicio",
+        tarifaUnidad: DEFAULT_TARIFA_UNIDAD,
+      },
+    ];
   }
 
   return items;
-}
-
-function toMaterialUnit(unidad: string): MaterialUnit {
-  if (unidad === "m" || unidad === "rollo" || unidad === "kg" || unidad === "caja") {
-    return unidad;
-  }
-  return "pza";
 }
 
 function addCatalogMaterial(
@@ -107,43 +116,16 @@ function addCatalogMaterial(
 }
 
 export function buildMaterialsFromSurvey(survey: Survey, catalog: Material[]): QuoteMaterialItem[] {
-  const items: QuoteMaterialItem[] = [];
   const partidas = survey.partidas ?? [];
-
-  for (const partida of partidas) {
-    if (partida.materialIncluido) continue;
-
-    const tipo = partida.tipoTrabajo.toLowerCase();
-    const needsMaterialLine =
-      tipo.includes("canalización") ||
-      tipo.includes("canalizacion") ||
-      tipo.includes("cableado") ||
-      tipo.includes("centro de carga") ||
-      tipo.includes("tablero") ||
-      tipo.includes("contacto") ||
-      tipo.includes("luminaria");
-
-    if (!needsMaterialLine) continue;
-
-    const exists = items.some(
-      (item) => item.descripcion === (partida.descripcion || partida.tipoTrabajo),
-    );
-    if (exists) continue;
-
-    items.push({
-      descripcion: partida.descripcion || partida.tipoTrabajo,
-      unidad: toMaterialUnit(partida.unidad),
-      cantidad: partida.cantidad || 1,
-      precioUnitario: 0,
-    });
+  if (partidas.length > 0) {
+    return [];
   }
 
-  if (partidas.length === 0) {
-    addCatalogMaterial(items, catalog, "Cableado", survey.metrosCable);
-    addCatalogMaterial(items, catalog, "Contactos", survey.numContactos);
-    addCatalogMaterial(items, catalog, "Iluminación", survey.numLuminarias);
-    if (survey.requiereTablero) addCatalogMaterial(items, catalog, "Tableros", 1);
-  }
+  const items: QuoteMaterialItem[] = [];
+  addCatalogMaterial(items, catalog, "Cableado", survey.metrosCable);
+  addCatalogMaterial(items, catalog, "Contactos", survey.numContactos);
+  addCatalogMaterial(items, catalog, "Iluminación", survey.numLuminarias);
+  if (survey.requiereTablero) addCatalogMaterial(items, catalog, "Tableros", 1);
 
   return items;
 }

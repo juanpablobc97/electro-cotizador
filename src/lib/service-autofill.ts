@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { Quote, ServiceMaterialItem, ServiceType, Survey } from "./types";
+import { normalizeLaborItem } from "./utils";
 
 function mapTipoServicio(survey?: Survey): ServiceType {
   if (!survey) return "instalacion";
@@ -46,7 +47,10 @@ function buildDescripcionFromQuote(quote: Quote): string {
   if (quote.manoObra.length > 0) {
     lineas.push("", "Trabajos ejecutados:");
     quote.manoObra.forEach((item) => {
-      lineas.push(`• ${item.descripcion} (${item.horas} hrs)`);
+      const labor = normalizeLaborItem(item);
+      lineas.push(
+        `• ${labor.descripcion} (${labor.cantidad} ${labor.unidad} × ${labor.tarifaUnidad})`,
+      );
     });
   }
 

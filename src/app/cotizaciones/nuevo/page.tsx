@@ -11,7 +11,7 @@ import {
   buildMaterialsFromSurvey,
   buildNotesFromSurvey,
 } from "@/lib/quote-from-survey";
-import type { MaterialUnit, QuoteLaborItem, QuoteMaterialItem } from "@/lib/types";
+import type { MaterialUnit, QuoteLaborItem, QuoteMaterialItem, WorkUnit } from "@/lib/types";
 import { generateQuoteNumber } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -29,7 +29,7 @@ function NuevaCotizacionForm() {
   const [manoObra, setManoObra] = useState<QuoteLaborItem[]>(
     preselectedSurveyId
       ? []
-      : [{ descripcion: "Instalación eléctrica", horas: 8, tarifaHora: 350 }],
+      : [{ descripcion: "Instalación eléctrica", cantidad: 1, unidad: "servicio", tarifaUnidad: 100 }],
   );
   const [notas, setNotas] = useState("");
   const seededSurveyId = useRef<number | null>(null);
@@ -103,7 +103,7 @@ function NuevaCotizacionForm() {
   }
 
   function addLaborRow() {
-    setManoObra((prev) => [...prev, { descripcion: "", horas: 1, tarifaHora: 350 }]);
+    setManoObra((prev) => [...prev, { descripcion: "", cantidad: 1, unidad: "pza", tarifaUnidad: 100 }]);
   }
 
   function removeLabor(index: number) {
@@ -174,7 +174,8 @@ function NuevaCotizacionForm() {
               </p>
               {(survey.partidas?.length ?? 0) > 0 && (
                 <p className="text-brand-navy/80">
-                  Se precargaron {survey.partidas.length} partida(s) en mano de obra.
+                  Se precargaron {survey.partidas.length} partida(s) en mano de obra (cantidad × tarifa
+                  por unidad). Agrega materiales del catálogo si aplica.
                 </p>
               )}
             </div>
@@ -280,29 +281,42 @@ function NuevaCotizacionForm() {
       </Card>
 
       <Card>
-        <CardHeader title="Mano de obra" />
+        <CardHeader title="Mano de obra" subtitle="Tarifa por unidad (cantidad × tarifa)" />
         <div className="space-y-3">
           {manoObra.map((item, index) => (
-            <div key={index} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-4">
+            <div key={index} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-5">
               <Input
                 label="Descripción"
                 value={item.descripcion}
                 onChange={(e) => updateLabor(index, "descripcion", e.target.value)}
               />
               <Input
-                label="Horas"
+                label="Cantidad"
                 type="number"
                 min={0}
-                step="0.5"
-                value={item.horas}
-                onChange={(e) => updateLabor(index, "horas", Number(e.target.value))}
+                step="0.01"
+                value={item.cantidad}
+                onChange={(e) => updateLabor(index, "cantidad", Number(e.target.value))}
+              />
+              <Select
+                label="Unidad"
+                value={item.unidad}
+                onChange={(e) => updateLabor(index, "unidad", e.target.value as WorkUnit)}
+                options={[
+                  { value: "pza", label: "pza" },
+                  { value: "m", label: "m" },
+                  { value: "servicio", label: "servicio" },
+                  { value: "hr", label: "hr" },
+                  { value: "rollo", label: "rollo" },
+                ]}
               />
               <Input
-                label="Tarifa/hr"
+                label="Tarifa/unidad"
                 type="number"
                 min={0}
-                value={item.tarifaHora}
-                onChange={(e) => updateLabor(index, "tarifaHora", Number(e.target.value))}
+                step="0.01"
+                value={item.tarifaUnidad}
+                onChange={(e) => updateLabor(index, "tarifaUnidad", Number(e.target.value))}
               />
               <div className="flex items-end">
                 <Button type="button" variant="danger" size="sm" onClick={() => removeLabor(index)}>

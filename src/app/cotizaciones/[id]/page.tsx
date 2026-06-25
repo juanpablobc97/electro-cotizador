@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import { generateQuotePdfBlob } from "@/lib/pdf";
 import { buildQuoteMessage, getQuoteEmailSubject } from "@/lib/share-pdf";
-import { calculateQuoteTotals, formatCurrency, formatDate } from "@/lib/utils";
+import { calculateQuoteTotals, formatCurrency, formatDate, laborImporte, normalizeLaborItem } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
@@ -140,20 +140,25 @@ export default function CotizacionDetallePage() {
               <thead>
                 <tr className="border-b text-left text-slate-500">
                   <th className="pb-2 pr-4">Descripción</th>
-                  <th className="pb-2 pr-4">Horas</th>
+                  <th className="pb-2 pr-4">Cant.</th>
+                  <th className="pb-2 pr-4">Unidad</th>
                   <th className="pb-2 pr-4">Tarifa</th>
                   <th className="pb-2">Importe</th>
                 </tr>
               </thead>
               <tbody>
-                {quote.manoObra.map((item, i) => (
+                {quote.manoObra.map((item, i) => {
+                  const labor = normalizeLaborItem(item);
+                  return (
                   <tr key={i} className="border-b border-slate-100">
-                    <td className="py-2 pr-4">{item.descripcion}</td>
-                    <td className="py-2 pr-4">{item.horas}</td>
-                    <td className="py-2 pr-4">{formatCurrency(item.tarifaHora)}</td>
-                    <td className="py-2">{formatCurrency(item.horas * item.tarifaHora)}</td>
+                    <td className="py-2 pr-4">{labor.descripcion}</td>
+                    <td className="py-2 pr-4">{labor.cantidad}</td>
+                    <td className="py-2 pr-4">{labor.unidad}</td>
+                    <td className="py-2 pr-4">{formatCurrency(labor.tarifaUnidad)}</td>
+                    <td className="py-2">{formatCurrency(laborImporte(item))}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

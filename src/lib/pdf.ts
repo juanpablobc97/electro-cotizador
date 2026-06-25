@@ -8,7 +8,7 @@ import {
   LOGO_PATH,
 } from "./branding";
 import type { Client, Quote, ServiceSheet, Survey } from "./types";
-import { SERVICE_TYPE_LABELS, calculateQuoteTotals, formatCurrency, formatDate } from "./utils";
+import { SERVICE_TYPE_LABELS, calculateQuoteTotals, formatCurrency, formatDate, laborImporte, normalizeLaborItem } from "./utils";
 
 const NAVY_RGB: [number, number, number] = [26, 37, 64];
 const GOLD_RGB: [number, number, number] = [240, 180, 41];
@@ -182,13 +182,17 @@ export async function generateQuotePdfBlob(
     doc.text("Mano de obra", margin, startY);
     autoTable(doc, {
       startY: startY + 4,
-      head: [["Descripción", "Horas", "Tarifa/hr", "Importe"]],
-      body: quote.manoObra.map((item) => [
-        item.descripcion,
-        item.horas.toString(),
-        formatCurrency(item.tarifaHora),
-        formatCurrency(item.horas * item.tarifaHora),
-      ]),
+      head: [["Descripción", "Unidad", "Cant.", "Tarifa", "Importe"]],
+      body: quote.manoObra.map((item) => {
+        const labor = normalizeLaborItem(item);
+        return [
+          labor.descripcion,
+          labor.unidad,
+          labor.cantidad.toString(),
+          formatCurrency(labor.tarifaUnidad),
+          formatCurrency(laborImporte(item)),
+        ];
+      }),
       styles: { fontSize: 9 },
       headStyles: { fillColor: NAVY_RGB, textColor: [255, 255, 255] },
     });

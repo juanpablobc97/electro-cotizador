@@ -134,8 +134,9 @@ export type QuoteMaterialItem = {
 
 export type QuoteLaborItem = {
   descripcion: string;
-  horas: number;
-  tarifaHora: number;
+  cantidad: number;
+  unidad: WorkUnit | string;
+  tarifaUnidad: number;
 };
 
 export type Quote = {

@@ -1,4 +1,29 @@
-import type { Quote, QuoteTotals } from "./types";
+import type { Quote, QuoteLaborItem, QuoteTotals } from "./types";
+
+type LegacyLaborItem = QuoteLaborItem & { horas?: number; tarifaHora?: number };
+
+export function normalizeLaborItem(item: LegacyLaborItem): QuoteLaborItem {
+  if (item.cantidad != null && item.tarifaUnidad != null) {
+    return {
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      unidad: item.unidad ?? "pza",
+      tarifaUnidad: item.tarifaUnidad,
+    };
+  }
+
+  return {
+    descripcion: item.descripcion,
+    cantidad: item.horas ?? 0,
+    unidad: "hr",
+    tarifaUnidad: item.tarifaHora ?? 0,
+  };
+}
+
+export function laborImporte(item: LegacyLaborItem): number {
+  const normalized = normalizeLaborItem(item);
+  return normalized.cantidad * normalized.tarifaUnidad;
+}
 
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("es-MX", {
@@ -21,10 +46,7 @@ export function calculateQuoteTotals(quote: Quote): QuoteTotals {
     (sum, item) => sum + item.cantidad * item.precioUnitario,
     0,
   );
-  const subtotalManoObra = quote.manoObra.reduce(
-    (sum, item) => sum + item.horas * item.tarifaHora,
-    0,
-  );
+  const subtotalManoObra = quote.manoObra.reduce((sum, item) => sum + laborImporte(item), 0);
   const subtotal = subtotalMateriales + subtotalManoObra;
   const iva = subtotal * (quote.ivaPorcentaje / 100);
   const total = subtotal + iva;
