@@ -6,34 +6,38 @@ import { FormEvent, Suspense, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
+import type { GeneralPhotos, SurveyWorkItem } from "@/lib/types";
+import { createEmptyWorkItem } from "@/lib/survey-work";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { FormSection } from "@/components/survey/FormSection";
+import { GeneralPhotosSection } from "@/components/survey/GeneralPhotosSection";
+import { SurveySummaryTable } from "@/components/survey/SurveySummaryTable";
+import { WorkItemCard } from "@/components/survey/WorkItemCard";
 
 function NuevoLevantamientoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId") ?? "";
   const [saving, setSaving] = useState(false);
-  const [fotos, setFotos] = useState<string[]>([]);
+  const [partidas, setPartidas] = useState<SurveyWorkItem[]>([]);
+  const [fotosGenerales, setFotosGenerales] = useState<GeneralPhotos>({});
 
   const clients = useLiveQuery(() => db.clients.orderBy("nombre").toArray()) ?? [];
 
-  function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files) return;
+  function addPartida() {
+    setPartidas((prev) => [...prev, createEmptyWorkItem()]);
+  }
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setFotos((prev) => [...prev, reader.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+  function updatePartida(index: number, item: SurveyWorkItem) {
+    setPartidas((prev) => prev.map((p, i) => (i === index ? item : p)));
+  }
+
+  function removePartida(index: number) {
+    setPartidas((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -42,6 +46,7 @@ function NuevoLevantamientoForm() {
 
     const form = new FormData(e.currentTarget);
     const now = new Date();
+    const sistemaTierra = form.get("sistemaTierraFisica");
 
     const id = await dataStore.surveys.create({
       clientId: Number(form.get("clientId")),
@@ -56,8 +61,16 @@ function NuevoLevantamientoForm() {
       numContactos: Number(form.get("numContactos")),
       numLuminarias: Number(form.get("numLuminarias")),
       requiereTablero: form.get("requiereTablero") === "on",
-      notas: String(form.get("notas") || "") || undefined,
-      fotos,
+      capacidadInterruptorPrincipal: String(form.get("capacidadInterruptorPrincipal") || "") || undefined,
+      espaciosTablero: form.get("espaciosTablero")
+        ? Number(form.get("espaciosTablero"))
+        : undefined,
+      sistemaTierraFisica:
+        sistemaTierra === "si" ? true : sistemaTierra === "no" ? false : undefined,
+      observacionesGenerales: String(form.get("observacionesGenerales") || "") || undefined,
+      partidas,
+      fotosGenerales,
+      fotos: [],
       createdAt: now,
       updatedAt: now,
     });
@@ -83,92 +96,134 @@ function NuevoLevantamientoForm() {
     <Card>
       <CardHeader
         title="Nuevo levantamiento"
-        subtitle="Datos técnicos y observaciones de la visita en sitio"
+        subtitle="Captura por partidas cotizables — datos del sitio y trabajos a efectuar"
       />
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Select
-          label="Cliente *"
-          name="clientId"
-          required
-          defaultValue={preselectedClientId}
-          options={[
-            { value: "", label: "Seleccionar cliente..." },
-            ...clients.map((c) => ({ value: String(c.id), label: c.nombre })),
-          ]}
-        />
-        <Input label="Título *" name="titulo" required placeholder="Instalación casa habitación" />
-        <Input
-          label="Fecha *"
-          name="fecha"
-          type="date"
-          required
-          defaultValue={new Date().toISOString().slice(0, 10)}
-        />
-        <Input label="Dirección de obra *" name="direccionObra" required />
-        <Select
-          label="Estado"
-          name="estado"
-          options={[
-            { value: "borrador", label: "Borrador" },
-            { value: "completado", label: "Completado" },
-          ]}
-        />
-        <Select
-          label="Tipo de instalación"
-          name="tipoInstalacion"
-          options={[
-            { value: "residencial", label: "Residencial" },
-            { value: "comercial", label: "Comercial" },
-            { value: "industrial", label: "Industrial" },
-            { value: "remodelacion", label: "Remodelación" },
-          ]}
-        />
-        <Select
-          label="Voltaje"
-          name="voltaje"
-          options={[
-            { value: "127V", label: "127V monofásico" },
-            { value: "220V", label: "220V bifásico" },
-            { value: "220V/440V", label: "220V/440V trifásico" },
-          ]}
-        />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="No. circuitos" name="numCircuitos" type="number" min={0} defaultValue={0} />
-          <Input label="Metros de cable" name="metrosCable" type="number" min={0} defaultValue={0} />
-          <Input label="Contactos" name="numContactos" type="number" min={0} defaultValue={0} />
-          <Input label="Luminarias" name="numLuminarias" type="number" min={0} defaultValue={0} />
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="requiereTablero" className="h-4 w-4 rounded" />
-          Requiere tablero de distribución
-        </label>
-        <Textarea label="Notas y observaciones" name="notas" placeholder="Condiciones del sitio, accesos, riesgos..." />
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">Fotos del sitio</label>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-            onChange={handlePhotoCapture}
-            className="text-sm"
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <FormSection title="1. Datos del cliente y obra">
+          <Select
+            label="Cliente *"
+            name="clientId"
+            required
+            defaultValue={preselectedClientId}
+            options={[
+              { value: "", label: "Seleccionar cliente..." },
+              ...clients.map((c) => ({ value: String(c.id), label: c.nombre })),
+            ]}
           />
-          {fotos.length > 0 && (
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {fotos.map((foto, i) => (
-                <img
-                  key={i}
-                  src={foto}
-                  alt={`Foto ${i + 1}`}
-                  className="aspect-square rounded-lg object-cover"
+          <Input label="Título *" name="titulo" required placeholder="Instalación casa habitación" />
+          <Input
+            label="Fecha *"
+            name="fecha"
+            type="date"
+            required
+            defaultValue={new Date().toISOString().slice(0, 10)}
+          />
+          <Input label="Dirección de obra *" name="direccionObra" required />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Tipo de instalación"
+              name="tipoInstalacion"
+              options={[
+                { value: "residencial", label: "Residencial" },
+                { value: "comercial", label: "Comercial" },
+                { value: "industrial", label: "Industrial" },
+                { value: "remodelacion", label: "Remodelación" },
+              ]}
+            />
+            <Select
+              label="Voltaje"
+              name="voltaje"
+              options={[
+                { value: "127V", label: "127V monofásico" },
+                { value: "220V", label: "220V bifásico" },
+                { value: "220V/440V", label: "220V/440V trifásico" },
+              ]}
+            />
+          </div>
+          <Select
+            label="Estado"
+            name="estado"
+            options={[
+              { value: "borrador", label: "Borrador" },
+              { value: "completado", label: "Completado" },
+            ]}
+          />
+        </FormSection>
+
+        <FormSection title="2. Datos técnicos generales">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="No. de circuitos" name="numCircuitos" type="number" min={0} defaultValue={0} />
+            <Input label="Metros de cable" name="metrosCable" type="number" min={0} defaultValue={0} />
+            <Input label="Contactos" name="numContactos" type="number" min={0} defaultValue={0} />
+            <Input label="Luminarias" name="numLuminarias" type="number" min={0} defaultValue={0} />
+            <Input
+              label="Capacidad del interruptor principal"
+              name="capacidadInterruptorPrincipal"
+              placeholder="Ej. 100 A"
+            />
+            <Input
+              label="Espacios disponibles en tablero"
+              name="espaciosTablero"
+              type="number"
+              min={0}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="requiereTablero" className="h-4 w-4 rounded" />
+            Requiere tablero de distribución
+          </label>
+          <Select
+            label="Sistema de tierra física"
+            name="sistemaTierraFisica"
+            options={[
+              { value: "", label: "No especificado" },
+              { value: "si", label: "Sí" },
+              { value: "no", label: "No" },
+            ]}
+          />
+          <Textarea
+            label="Observaciones generales"
+            name="observacionesGenerales"
+            placeholder="Condiciones del sitio, accesos, riesgos..."
+          />
+        </FormSection>
+
+        <FormSection
+          title="3. Trabajos a efectuar"
+          subtitle="Cada trabajo se guarda como una partida cotizable"
+        >
+          {partidas.length === 0 ? (
+            <p className="text-sm text-slate-500">Aún no hay trabajos agregados.</p>
+          ) : (
+            <div className="space-y-4">
+              {partidas.map((item, index) => (
+                <WorkItemCard
+                  key={item.id}
+                  item={item}
+                  index={index}
+                  onChange={(updated) => updatePartida(index, updated)}
+                  onRemove={() => removePartida(index)}
                 />
               ))}
             </div>
           )}
-        </div>
+          <Button type="button" variant="secondary" onClick={addPartida}>
+            + Agregar trabajo
+          </Button>
+        </FormSection>
 
-        <div className="flex gap-3 pt-2">
+        <FormSection
+          title="4. Evidencia fotográfica general"
+          subtitle="Fotos del sitio separadas de las fotos por partida"
+        >
+          <GeneralPhotosSection fotosGenerales={fotosGenerales} onChange={setFotosGenerales} />
+        </FormSection>
+
+        <FormSection title="5. Resumen para cotización">
+          <SurveySummaryTable partidas={partidas} />
+        </FormSection>
+
+        <div className="flex flex-wrap gap-3 pt-2">
           <Button type="submit" disabled={saving}>
             {saving ? "Guardando..." : "Guardar levantamiento"}
           </Button>

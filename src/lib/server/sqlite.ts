@@ -102,7 +102,67 @@ function getDb(): Database.Database {
     );
   `);
 
+  migrateSurveysTable(dbInstance);
+
   return dbInstance;
+}
+
+function migrateSurveysTable(db: Database.Database) {
+  const columns = db.prepare("PRAGMA table_info(surveys)").all() as { name: string }[];
+  const names = new Set(columns.map((c) => c.name));
+
+  const additions: [string, string][] = [
+    ["capacidadInterruptorPrincipal", "TEXT"],
+    ["espaciosTablero", "INTEGER"],
+    ["sistemaTierraFisica", "INTEGER"],
+    ["observacionesGenerales", "TEXT"],
+    ["partidas", "TEXT NOT NULL DEFAULT '[]'"],
+    ["fotosGenerales", "TEXT NOT NULL DEFAULT '{}'"],
+  ];
+
+  for (const [name, definition] of additions) {
+    if (!names.has(name)) {
+      db.exec(`ALTER TABLE surveys ADD COLUMN ${name} ${definition}`);
+    }
+  }
+}
+
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value == null || value === "") return fallback;
+  if (typeof value !== "string") return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function surveyToBindParams(survey: Survey) {
+  return {
+    clientId: survey.clientId,
+    titulo: survey.titulo,
+    fecha: toIso(survey.fecha),
+    direccionObra: survey.direccionObra,
+    estado: survey.estado,
+    tipoInstalacion: survey.tipoInstalacion,
+    voltaje: survey.voltaje,
+    numCircuitos: survey.numCircuitos,
+    metrosCable: survey.metrosCable,
+    numContactos: survey.numContactos,
+    numLuminarias: survey.numLuminarias,
+    requiereTablero: survey.requiereTablero ? 1 : 0,
+    capacidadInterruptorPrincipal: survey.capacidadInterruptorPrincipal ?? null,
+    espaciosTablero: survey.espaciosTablero ?? null,
+    sistemaTierraFisica:
+      survey.sistemaTierraFisica == null ? null : survey.sistemaTierraFisica ? 1 : 0,
+    observacionesGenerales: survey.observacionesGenerales ?? null,
+    notas: survey.notas ?? null,
+    partidas: JSON.stringify(survey.partidas ?? []),
+    fotosGenerales: JSON.stringify(survey.fotosGenerales ?? {}),
+    fotos: JSON.stringify(survey.fotos ?? []),
+    createdAt: toIso(survey.createdAt),
+    updatedAt: toIso(survey.updatedAt),
+  };
 }
 
 function parseDate(value: string): Date {
@@ -151,8 +211,15 @@ function rowToSurvey(row: Record<string, unknown>): Survey {
     numContactos: row.numContactos as number,
     numLuminarias: row.numLuminarias as number,
     requiereTablero: Boolean(row.requiereTablero),
+    capacidadInterruptorPrincipal: (row.capacidadInterruptorPrincipal as string) || undefined,
+    espaciosTablero: row.espaciosTablero != null ? Number(row.espaciosTablero) : undefined,
+    sistemaTierraFisica:
+      row.sistemaTierraFisica != null ? Boolean(row.sistemaTierraFisica) : undefined,
+    observacionesGenerales: (row.observacionesGenerales as string) || undefined,
     notas: (row.notas as string) || undefined,
-    fotos: JSON.parse(row.fotos as string),
+    partidas: parseJsonField(row.partidas, []),
+    fotosGenerales: parseJsonField(row.fotosGenerales, {}),
+    fotos: parseJsonField(row.fotos, []),
     createdAt: parseDate(row.createdAt as string),
     updatedAt: parseDate(row.updatedAt as string),
   };
@@ -339,11 +406,13 @@ export function mergeLocalData(input: MergeInput) {
       INSERT INTO surveys (
         clientId, titulo, fecha, direccionObra, estado, tipoInstalacion, voltaje,
         numCircuitos, metrosCable, numContactos, numLuminarias, requiereTablero,
-        notas, fotos, createdAt, updatedAt
+        capacidadInterruptorPrincipal, espaciosTablero, sistemaTierraFisica, observacionesGenerales,
+        notas, partidas, fotosGenerales, fotos, createdAt, updatedAt
       ) VALUES (
         @clientId, @titulo, @fecha, @direccionObra, @estado, @tipoInstalacion, @voltaje,
         @numCircuitos, @metrosCable, @numContactos, @numLuminarias, @requiereTablero,
-        @notas, @fotos, @createdAt, @updatedAt
+        @capacidadInterruptorPrincipal, @espaciosTablero, @sistemaTierraFisica, @observacionesGenerales,
+        @notas, @partidas, @fotosGenerales, @fotos, @createdAt, @updatedAt
       )
     `);
 
@@ -353,22 +422,8 @@ export function mergeLocalData(input: MergeInput) {
       if (mappedClientId == null) continue;
 
       const result = insertSurvey.run({
+        ...surveyToBindParams(survey),
         clientId: mappedClientId,
-        titulo: survey.titulo,
-        fecha: toIso(survey.fecha),
-        direccionObra: survey.direccionObra,
-        estado: survey.estado,
-        tipoInstalacion: survey.tipoInstalacion,
-        voltaje: survey.voltaje,
-        numCircuitos: survey.numCircuitos,
-        metrosCable: survey.metrosCable,
-        numContactos: survey.numContactos,
-        numLuminarias: survey.numLuminarias,
-        requiereTablero: survey.requiereTablero ? 1 : 0,
-        notas: survey.notas ?? null,
-        fotos: JSON.stringify(survey.fotos ?? []),
-        createdAt: toIso(survey.createdAt),
-        updatedAt: toIso(survey.updatedAt),
       });
       if (oldId != null) surveyIdMap.set(oldId, Number(result.lastInsertRowid));
     }
@@ -534,24 +589,13 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
         UPDATE surveys SET clientId=@clientId, titulo=@titulo, fecha=@fecha, direccionObra=@direccionObra,
         estado=@estado, tipoInstalacion=@tipoInstalacion, voltaje=@voltaje, numCircuitos=@numCircuitos,
         metrosCable=@metrosCable, numContactos=@numContactos, numLuminarias=@numLuminarias,
-        requiereTablero=@requiereTablero, notas=@notas, fotos=@fotos, updatedAt=@updatedAt WHERE id=@id
+        requiereTablero=@requiereTablero, capacidadInterruptorPrincipal=@capacidadInterruptorPrincipal,
+        espaciosTablero=@espaciosTablero, sistemaTierraFisica=@sistemaTierraFisica,
+        observacionesGenerales=@observacionesGenerales, notas=@notas, partidas=@partidas,
+        fotosGenerales=@fotosGenerales, fotos=@fotos, updatedAt=@updatedAt WHERE id=@id
       `).run({
         id: r.id,
-        clientId: r.clientId,
-        titulo: r.titulo,
-        fecha: toIso(r.fecha),
-        direccionObra: r.direccionObra,
-        estado: r.estado,
-        tipoInstalacion: r.tipoInstalacion,
-        voltaje: r.voltaje,
-        numCircuitos: r.numCircuitos,
-        metrosCable: r.metrosCable,
-        numContactos: r.numContactos,
-        numLuminarias: r.numLuminarias,
-        requiereTablero: r.requiereTablero ? 1 : 0,
-        notas: r.notas ?? null,
-        fotos: JSON.stringify(r.fotos ?? []),
-        updatedAt: toIso(r.updatedAt),
+        ...surveyToBindParams(r),
       });
       return rowToSurvey(db.prepare("SELECT * FROM surveys WHERE id = ?").get(r.id) as Record<string, unknown>);
     }
@@ -560,30 +604,15 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
       INSERT INTO surveys (
         clientId, titulo, fecha, direccionObra, estado, tipoInstalacion, voltaje,
         numCircuitos, metrosCable, numContactos, numLuminarias, requiereTablero,
-        notas, fotos, createdAt, updatedAt
+        capacidadInterruptorPrincipal, espaciosTablero, sistemaTierraFisica, observacionesGenerales,
+        notas, partidas, fotosGenerales, fotos, createdAt, updatedAt
       ) VALUES (
         @clientId, @titulo, @fecha, @direccionObra, @estado, @tipoInstalacion, @voltaje,
         @numCircuitos, @metrosCable, @numContactos, @numLuminarias, @requiereTablero,
-        @notas, @fotos, @createdAt, @updatedAt
+        @capacidadInterruptorPrincipal, @espaciosTablero, @sistemaTierraFisica, @observacionesGenerales,
+        @notas, @partidas, @fotosGenerales, @fotos, @createdAt, @updatedAt
       )
-    `).run({
-      clientId: r.clientId,
-      titulo: r.titulo,
-      fecha: toIso(r.fecha),
-      direccionObra: r.direccionObra,
-      estado: r.estado,
-      tipoInstalacion: r.tipoInstalacion,
-      voltaje: r.voltaje,
-      numCircuitos: r.numCircuitos,
-      metrosCable: r.metrosCable,
-      numContactos: r.numContactos,
-      numLuminarias: r.numLuminarias,
-      requiereTablero: r.requiereTablero ? 1 : 0,
-      notas: r.notas ?? null,
-      fotos: JSON.stringify(r.fotos ?? []),
-      createdAt: toIso(r.createdAt),
-      updatedAt: toIso(r.updatedAt),
-    });
+    `).run(surveyToBindParams(r));
     return rowToSurvey(
       db.prepare("SELECT * FROM surveys WHERE id = ?").get(result.lastInsertRowid) as Record<string, unknown>,
     );

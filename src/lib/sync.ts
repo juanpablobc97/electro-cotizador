@@ -51,7 +51,15 @@ function normalizePayload(payload: SyncPayload): SyncPayload {
   return {
     clients: payload.clients.map((c) => reviveDates(c, ["createdAt", "updatedAt"])),
     materials: payload.materials.map((m) => reviveDates(m, ["createdAt", "updatedAt"])),
-    surveys: payload.surveys.map((s) => reviveDates(s, ["fecha", "createdAt", "updatedAt"])),
+    surveys: payload.surveys.map((s) => {
+      const revived = reviveDates(s, ["fecha", "createdAt", "updatedAt"]);
+      return {
+        ...revived,
+        partidas: revived.partidas ?? [],
+        fotosGenerales: revived.fotosGenerales ?? {},
+        fotos: revived.fotos ?? [],
+      };
+    }),
     quotes: payload.quotes.map((q) => reviveDates(q, ["fecha", "createdAt", "updatedAt"])),
     serviceSheets: payload.serviceSheets.map((s) =>
       reviveDates(s, ["fecha", "createdAt", "updatedAt"]),

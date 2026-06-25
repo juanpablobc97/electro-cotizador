@@ -51,7 +51,8 @@ export default function LevantamientosPage() {
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
                       {survey.numCircuitos} circuitos · {survey.metrosCable} m cable ·{" "}
-                      {survey.fotos.length} foto{survey.fotos.length !== 1 ? "s" : ""}
+                      {(survey.partidas?.length ?? 0)} partida
+                      {(survey.partidas?.length ?? 0) !== 1 ? "s" : ""}
                     </p>
                   </div>
                   <div className="text-right">

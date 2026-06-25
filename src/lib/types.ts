@@ -25,6 +25,70 @@ export type Material = {
 
 export type SurveyStatus = "borrador" | "completado";
 
+export type WorkDifficulty = "baja" | "media" | "alta";
+
+export type WorkUnit = "pza" | "m" | "servicio" | "hr" | "rollo";
+
+export type GeneralPhotoKey =
+  | "fachada"
+  | "acometida"
+  | "medidor"
+  | "tablero"
+  | "interiorTablero"
+  | "rutaGeneral"
+  | "areaTrabajo";
+
+export type GeneralPhotos = Partial<Record<GeneralPhotoKey, string[]>>;
+
+export type PhotovoltaicData = {
+  tipoProyecto?: "interconectado" | "aislado" | "hibrido";
+  reciboCfe?: string;
+  consumoKwhBimestral?: number;
+  tarifaCfe?: string;
+  demandaObjetivo?: string;
+  capacidadEstimadaKw?: number;
+  numeroPaneles?: number;
+  potenciaPanel?: number;
+  tipoInversor?: "central" | "microinversores" | "hibrido";
+  voltajeInterconexion?: string;
+  tipoTecho?: "losa" | "lamina" | "teja" | "estructura_metalica";
+  areaDisponible?: string;
+  orientacionTecho?: string;
+  inclinacionAproximada?: string;
+  sombras?: boolean;
+  obstaculosTecho?: string;
+  distanciaPanelesInversor?: string;
+  distanciaInversorTablero?: string;
+  requiereEstructura?: boolean;
+  requiereCanalizacion?: boolean;
+  requiereProteccionesDcAc?: boolean;
+  requiereSistemaTierras?: boolean;
+  requiereTramiteCfe?: boolean;
+  fotosReciboCfe?: string[];
+  fotosTecho?: string[];
+  fotosTablero?: string[];
+  fotosAcometida?: string[];
+  fotosRutaCanalizacion?: string[];
+};
+
+export type SurveyWorkItem = {
+  id: string;
+  tipoTrabajo: string;
+  area: string;
+  cantidad: number;
+  unidad: WorkUnit | string;
+  descripcion: string;
+  descripcionManual: boolean;
+  materialIncluido: boolean;
+  dificultad: WorkDifficulty;
+  alturaTrabajo: string;
+  requiereRanura: boolean;
+  requiereCanalizacion: boolean;
+  fotos: string[];
+  observaciones?: string;
+  fotovoltaico?: PhotovoltaicData;
+};
+
 export type Survey = {
   id?: number;
   clientId: number;
@@ -39,7 +103,13 @@ export type Survey = {
   numContactos: number;
   numLuminarias: number;
   requiereTablero: boolean;
+  capacidadInterruptorPrincipal?: string;
+  espaciosTablero?: number;
+  sistemaTierraFisica?: boolean;
+  observacionesGenerales?: string;
   notas?: string;
+  partidas: SurveyWorkItem[];
+  fotosGenerales: GeneralPhotos;
   fotos: string[];
   createdAt: Date;
   updatedAt: Date;
