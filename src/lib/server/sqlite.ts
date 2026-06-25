@@ -10,7 +10,7 @@ const DB_PATH = path.join(DB_DIR, "electro-cotizador.db");
 
 let dbInstance: Database.Database | null = null;
 
-function getDb(): Database.Database {
+export function getDb(): Database.Database {
   if (dbInstance) return dbInstance;
 
   fs.mkdirSync(DB_DIR, { recursive: true });
@@ -341,6 +341,11 @@ function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function updateOrInsertById(update: () => Database.RunResult, insert: () => void): void {
+  const result = update();
+  if (result.changes === 0) insert();
+}
+
 export function mergeLocalData(input: MergeInput) {
   const db = getDb();
 
@@ -513,10 +518,7 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
   if (action.table === "clients") {
     const r = action.record;
     if (r.id) {
-      db.prepare(`
-        UPDATE clients SET nombre=@nombre, empresa=@empresa, telefono=@telefono, email=@email,
-        direccion=@direccion, notas=@notas, updatedAt=@updatedAt WHERE id=@id
-      `).run({
+      const params = {
         id: r.id,
         nombre: r.nombre,
         empresa: r.empresa ?? null,
@@ -524,8 +526,30 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
         email: r.email ?? null,
         direccion: r.direccion,
         notas: r.notas ?? null,
+        createdAt: toIso(r.createdAt),
         updatedAt: toIso(r.updatedAt),
-      });
+      };
+      updateOrInsertById(
+        () =>
+          db.prepare(`
+            UPDATE clients SET nombre=@nombre, empresa=@empresa, telefono=@telefono, email=@email,
+            direccion=@direccion, notas=@notas, updatedAt=@updatedAt WHERE id=@id
+          `).run({
+            id: r.id,
+            nombre: r.nombre,
+            empresa: r.empresa ?? null,
+            telefono: r.telefono,
+            email: r.email ?? null,
+            direccion: r.direccion,
+            notas: r.notas ?? null,
+            updatedAt: toIso(r.updatedAt),
+          }),
+        () =>
+          db.prepare(`
+            INSERT INTO clients (id, nombre, empresa, telefono, email, direccion, notas, createdAt, updatedAt)
+            VALUES (@id, @nombre, @empresa, @telefono, @email, @direccion, @notas, @createdAt, @updatedAt)
+          `).run(params),
+      );
       return rowToClient(db.prepare("SELECT * FROM clients WHERE id = ?").get(r.id) as Record<string, unknown>);
     }
 
@@ -550,18 +574,36 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
   if (action.table === "materials") {
     const r = action.record;
     if (r.id) {
-      db.prepare(`
-        UPDATE materials SET codigo=@codigo, nombre=@nombre, unidad=@unidad, precioUnitario=@precioUnitario,
-        categoria=@categoria, updatedAt=@updatedAt WHERE id=@id
-      `).run({
+      const params = {
         id: r.id,
         codigo: r.codigo,
         nombre: r.nombre,
         unidad: r.unidad,
         precioUnitario: r.precioUnitario,
         categoria: r.categoria,
+        createdAt: toIso(r.createdAt),
         updatedAt: toIso(r.updatedAt),
-      });
+      };
+      updateOrInsertById(
+        () =>
+          db.prepare(`
+            UPDATE materials SET codigo=@codigo, nombre=@nombre, unidad=@unidad, precioUnitario=@precioUnitario,
+            categoria=@categoria, updatedAt=@updatedAt WHERE id=@id
+          `).run({
+            id: r.id,
+            codigo: r.codigo,
+            nombre: r.nombre,
+            unidad: r.unidad,
+            precioUnitario: r.precioUnitario,
+            categoria: r.categoria,
+            updatedAt: toIso(r.updatedAt),
+          }),
+        () =>
+          db.prepare(`
+            INSERT INTO materials (id, codigo, nombre, unidad, precioUnitario, categoria, createdAt, updatedAt)
+            VALUES (@id, @codigo, @nombre, @unidad, @precioUnitario, @categoria, @createdAt, @updatedAt)
+          `).run(params),
+      );
       return rowToMaterial(db.prepare("SELECT * FROM materials WHERE id = ?").get(r.id) as Record<string, unknown>);
     }
 
@@ -585,18 +627,33 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
   if (action.table === "surveys") {
     const r = action.record;
     if (r.id) {
-      db.prepare(`
-        UPDATE surveys SET clientId=@clientId, titulo=@titulo, fecha=@fecha, direccionObra=@direccionObra,
-        estado=@estado, tipoInstalacion=@tipoInstalacion, voltaje=@voltaje, numCircuitos=@numCircuitos,
-        metrosCable=@metrosCable, numContactos=@numContactos, numLuminarias=@numLuminarias,
-        requiereTablero=@requiereTablero, capacidadInterruptorPrincipal=@capacidadInterruptorPrincipal,
-        espaciosTablero=@espaciosTablero, sistemaTierraFisica=@sistemaTierraFisica,
-        observacionesGenerales=@observacionesGenerales, notas=@notas, partidas=@partidas,
-        fotosGenerales=@fotosGenerales, fotos=@fotos, updatedAt=@updatedAt WHERE id=@id
-      `).run({
-        id: r.id,
-        ...surveyToBindParams(r),
-      });
+      const bind = { id: r.id, ...surveyToBindParams(r) };
+      updateOrInsertById(
+        () =>
+          db.prepare(`
+            UPDATE surveys SET clientId=@clientId, titulo=@titulo, fecha=@fecha, direccionObra=@direccionObra,
+            estado=@estado, tipoInstalacion=@tipoInstalacion, voltaje=@voltaje, numCircuitos=@numCircuitos,
+            metrosCable=@metrosCable, numContactos=@numContactos, numLuminarias=@numLuminarias,
+            requiereTablero=@requiereTablero, capacidadInterruptorPrincipal=@capacidadInterruptorPrincipal,
+            espaciosTablero=@espaciosTablero, sistemaTierraFisica=@sistemaTierraFisica,
+            observacionesGenerales=@observacionesGenerales, notas=@notas, partidas=@partidas,
+            fotosGenerales=@fotosGenerales, fotos=@fotos, updatedAt=@updatedAt WHERE id=@id
+          `).run(bind),
+        () =>
+          db.prepare(`
+            INSERT INTO surveys (
+              id, clientId, titulo, fecha, direccionObra, estado, tipoInstalacion, voltaje,
+              numCircuitos, metrosCable, numContactos, numLuminarias, requiereTablero,
+              capacidadInterruptorPrincipal, espaciosTablero, sistemaTierraFisica, observacionesGenerales,
+              notas, partidas, fotosGenerales, fotos, createdAt, updatedAt
+            ) VALUES (
+              @id, @clientId, @titulo, @fecha, @direccionObra, @estado, @tipoInstalacion, @voltaje,
+              @numCircuitos, @metrosCable, @numContactos, @numLuminarias, @requiereTablero,
+              @capacidadInterruptorPrincipal, @espaciosTablero, @sistemaTierraFisica, @observacionesGenerales,
+              @notas, @partidas, @fotosGenerales, @fotos, @createdAt, @updatedAt
+            )
+          `).run(bind),
+      );
       return rowToSurvey(db.prepare("SELECT * FROM surveys WHERE id = ?").get(r.id) as Record<string, unknown>);
     }
 
@@ -621,11 +678,7 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
   if (action.table === "quotes") {
     const r = action.record;
     if (r.id) {
-      db.prepare(`
-        UPDATE quotes SET clientId=@clientId, surveyId=@surveyId, numero=@numero, fecha=@fecha,
-        validezDias=@validezDias, materiales=@materiales, manoObra=@manoObra, notas=@notas,
-        ivaPorcentaje=@ivaPorcentaje, estado=@estado, updatedAt=@updatedAt WHERE id=@id
-      `).run({
+      const params = {
         id: r.id,
         clientId: r.clientId,
         surveyId: r.surveyId ?? null,
@@ -637,8 +690,40 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
         notas: r.notas ?? null,
         ivaPorcentaje: r.ivaPorcentaje,
         estado: r.estado,
+        createdAt: toIso(r.createdAt),
         updatedAt: toIso(r.updatedAt),
-      });
+      };
+      updateOrInsertById(
+        () =>
+          db.prepare(`
+            UPDATE quotes SET clientId=@clientId, surveyId=@surveyId, numero=@numero, fecha=@fecha,
+            validezDias=@validezDias, materiales=@materiales, manoObra=@manoObra, notas=@notas,
+            ivaPorcentaje=@ivaPorcentaje, estado=@estado, updatedAt=@updatedAt WHERE id=@id
+          `).run({
+            id: r.id,
+            clientId: r.clientId,
+            surveyId: r.surveyId ?? null,
+            numero: r.numero,
+            fecha: toIso(r.fecha),
+            validezDias: r.validezDias,
+            materiales: JSON.stringify(r.materiales ?? []),
+            manoObra: JSON.stringify(r.manoObra ?? []),
+            notas: r.notas ?? null,
+            ivaPorcentaje: r.ivaPorcentaje,
+            estado: r.estado,
+            updatedAt: toIso(r.updatedAt),
+          }),
+        () =>
+          db.prepare(`
+            INSERT INTO quotes (
+              id, clientId, surveyId, numero, fecha, validezDias, materiales, manoObra,
+              notas, ivaPorcentaje, estado, createdAt, updatedAt
+            ) VALUES (
+              @id, @clientId, @surveyId, @numero, @fecha, @validezDias, @materiales, @manoObra,
+              @notas, @ivaPorcentaje, @estado, @createdAt, @updatedAt
+            )
+          `).run(params),
+      );
       return rowToQuote(db.prepare("SELECT * FROM quotes WHERE id = ?").get(r.id) as Record<string, unknown>);
     }
 
@@ -671,12 +756,7 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
 
   const r = action.record;
   if (r.id) {
-    db.prepare(`
-      UPDATE service_sheets SET clientId=@clientId, quoteId=@quoteId, numero=@numero, fecha=@fecha,
-      tipoServicio=@tipoServicio, direccionServicio=@direccionServicio, descripcionTrabajo=@descripcionTrabajo,
-      materiales=@materiales, garantiaMeses=@garantiaMeses, notas=@notas, fotos=@fotos, tecnico=@tecnico,
-      updatedAt=@updatedAt WHERE id=@id
-    `).run({
+    const params = {
       id: r.id,
       clientId: r.clientId,
       quoteId: r.quoteId ?? null,
@@ -690,8 +770,43 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
       notas: r.notas ?? null,
       fotos: JSON.stringify(r.fotos ?? []),
       tecnico: r.tecnico ?? null,
+      createdAt: toIso(r.createdAt),
       updatedAt: toIso(r.updatedAt),
-    });
+    };
+    updateOrInsertById(
+      () =>
+        db.prepare(`
+          UPDATE service_sheets SET clientId=@clientId, quoteId=@quoteId, numero=@numero, fecha=@fecha,
+          tipoServicio=@tipoServicio, direccionServicio=@direccionServicio, descripcionTrabajo=@descripcionTrabajo,
+          materiales=@materiales, garantiaMeses=@garantiaMeses, notas=@notas, fotos=@fotos, tecnico=@tecnico,
+          updatedAt=@updatedAt WHERE id=@id
+        `).run({
+          id: r.id,
+          clientId: r.clientId,
+          quoteId: r.quoteId ?? null,
+          numero: r.numero,
+          fecha: toIso(r.fecha),
+          tipoServicio: r.tipoServicio,
+          direccionServicio: r.direccionServicio,
+          descripcionTrabajo: r.descripcionTrabajo,
+          materiales: JSON.stringify(r.materiales ?? []),
+          garantiaMeses: r.garantiaMeses,
+          notas: r.notas ?? null,
+          fotos: JSON.stringify(r.fotos ?? []),
+          tecnico: r.tecnico ?? null,
+          updatedAt: toIso(r.updatedAt),
+        }),
+      () =>
+        db.prepare(`
+          INSERT INTO service_sheets (
+            id, clientId, quoteId, numero, fecha, tipoServicio, direccionServicio, descripcionTrabajo,
+            materiales, garantiaMeses, notas, fotos, tecnico, createdAt, updatedAt
+          ) VALUES (
+            @id, @clientId, @quoteId, @numero, @fecha, @tipoServicio, @direccionServicio, @descripcionTrabajo,
+            @materiales, @garantiaMeses, @notas, @fotos, @tecnico, @createdAt, @updatedAt
+          )
+        `).run(params),
+    );
     return rowToServiceSheet(
       db.prepare("SELECT * FROM service_sheets WHERE id = ?").get(r.id) as Record<string, unknown>,
     );
