@@ -1,0 +1,25 @@
+{
+  "name": "BERNAL INSTALACIONES ELECTRICAS",
+  "short_name": "BERNAL IE",
+  "description": "Cartera de clientes, levantamientos y cotizaciones para instalaciones eléctricas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1a2540",
+  "orientation": "any",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "359x360",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
