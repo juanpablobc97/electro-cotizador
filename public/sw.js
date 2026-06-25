@@ -1,9 +1,9 @@
-const CACHE_NAME = "bernal-cotizador-v3";
-const ASSETS = ["/", "/manifest.json", "/logo.png"];
+const CACHE_NAME = "bernal-cotizador-v4";
+const STATIC_ASSETS = ["/manifest.json", "/logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)),
   );
   self.skipWaiting();
 });
@@ -17,26 +17,38 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+function isAppShellRequest(url, request) {
+  return (
+    request.mode === "navigate" ||
+    url.pathname === "/" ||
+    url.pathname.startsWith("/_next/")
+  );
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // API de sincronización siempre va directo a la red (nunca caché offline)
   if (url.pathname.startsWith("/api/")) return;
   if (event.request.method !== "GET") return;
 
+  if (isAppShellRequest(url, event.request)) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request)
-        .then((response) => {
+    caches.match(event.request).then(
+      (cached) =>
+        cached ||
+        fetch(event.request).then((response) => {
           if (response.ok && event.request.url.startsWith(self.location.origin)) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
           return response;
-        })
-        .catch(() => cached);
-
-      return cached || fetchPromise;
-    }),
+        }),
+    ),
   );
 });

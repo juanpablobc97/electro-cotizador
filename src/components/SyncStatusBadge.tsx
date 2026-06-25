@@ -42,7 +42,7 @@ export function SyncStatusBadge() {
         (status === "idle" || status === "error") && "bg-white/10 text-white/70",
       )}
     >
-      {labels[status]}
+      {labels[status] ?? labels.idle}
     </button>
   );
 }
