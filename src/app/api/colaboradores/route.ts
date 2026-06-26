@@ -6,6 +6,7 @@ import {
   createUserForColaborador,
   deleteColaborador,
   getLinkedUser,
+  getPersistenceStatus,
   listColaboradores,
   restoreColaboradores,
   setColaboradorCatalogPricesPermission,
@@ -74,7 +75,16 @@ const actionSchema = z.discriminatedUnion("action", [
 export async function GET() {
   try {
     await requireAdmin();
-    return NextResponse.json({ colaboradores: listColaboradores() });
+    const status = getPersistenceStatus();
+    const persistenceWarning = !status.databaseDirConfigured
+      ? "⚠️ Los datos pueden borrarse en cada actualización: en Railway configura un volumen en /data y la variable DATABASE_DIR=/data."
+      : "";
+
+    return NextResponse.json({
+      colaboradores: listColaboradores(),
+      persistence: status,
+      persistenceWarning,
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });

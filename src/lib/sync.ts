@@ -1,4 +1,10 @@
 import { db } from "@/lib/db";
+import {
+  colaboradorToRestoreRecord,
+  loadColaboradoresLocalBackup,
+  mergeColaboradorBackups,
+  saveColaboradoresLocalBackup,
+} from "@/lib/colaboradores-backup";
 import type { Client, ColaboradorWithUser, Material, Quote, ServiceSheet, Survey } from "@/lib/types";
 
 export type SyncPayload = {
@@ -104,42 +110,16 @@ function normalizeColaborador(c: ColaboradorWithUser): ColaboradorWithUser {
   };
 }
 
-function colaboradorToRestoreRecord(c: ColaboradorWithUser) {
-  return {
-    id: c.id!,
-    nombre: c.nombre,
-    puesto: c.puesto,
-    sueldo: c.sueldo ?? null,
-    telefono: c.telefono ?? null,
-    email: c.email ?? null,
-    fechaIngreso: c.fechaIngreso
-      ? c.fechaIngreso instanceof Date
-        ? c.fechaIngreso.toISOString().slice(0, 10)
-        : String(c.fechaIngreso).slice(0, 10)
-      : null,
-    notas: c.notas ?? null,
-    activo: c.activo,
-    userId: c.userId ?? null,
-    createdAt:
-      c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
-    updatedAt:
-      c.updatedAt instanceof Date ? c.updatedAt.toISOString() : String(c.updatedAt),
-  };
+async function getLocalColaboradoresBackup(): Promise<ColaboradorWithUser[]> {
+  return mergeColaboradorBackups(
+    await db.colaboradoresCache.toArray(),
+    loadColaboradoresLocalBackup(),
+  );
 }
 
-async function syncColaboradoresCache(colaboradores: ColaboradorWithUser[] | undefined) {
-  if (colaboradores === undefined) return;
-
-  if (colaboradores.length > 0) {
-    await db.transaction("rw", db.colaboradoresCache, async () => {
-      await db.colaboradoresCache.clear();
-      await db.colaboradoresCache.bulkPut(colaboradores.map(normalizeColaborador));
-    });
-    return;
-  }
-
-  const cached = await db.colaboradoresCache.toArray();
-  if (cached.length === 0) return;
+async function restoreColaboradoresFromLocalBackup(): Promise<boolean> {
+  const cached = await getLocalColaboradoresBackup();
+  if (cached.length === 0) return false;
 
   const response = await fetch("/api/colaboradores", {
     method: "POST",
@@ -149,7 +129,23 @@ async function syncColaboradoresCache(colaboradores: ColaboradorWithUser[] | und
       records: cached.map(colaboradorToRestoreRecord),
     }),
   });
-  if (!response.ok) return;
+  return response.ok;
+}
+
+async function syncColaboradoresCache(colaboradores: ColaboradorWithUser[] | undefined) {
+  if (colaboradores === undefined) return;
+
+  if (colaboradores.length > 0) {
+    const normalized = colaboradores.map(normalizeColaborador);
+    saveColaboradoresLocalBackup(normalized);
+    await db.transaction("rw", db.colaboradoresCache, async () => {
+      await db.colaboradoresCache.clear();
+      await db.colaboradoresCache.bulkPut(normalized);
+    });
+    return;
+  }
+
+  await restoreColaboradoresFromLocalBackup();
 }
 
 function normalizePayload(payload: SyncPayload): SyncPayload {
@@ -260,8 +256,8 @@ export async function pullFromServer() {
     let payload = normalizePayload(await fetchSyncPayload());
     await syncColaboradoresCache(payload.colaboradores);
     if (payload.colaboradores !== undefined && payload.colaboradores.length === 0) {
-      const cached = await db.colaboradoresCache.toArray();
-      if (cached.length > 0) {
+      const restored = await restoreColaboradoresFromLocalBackup();
+      if (restored) {
         payload = normalizePayload(await fetchSyncPayload());
       }
     }

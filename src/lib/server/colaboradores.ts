@@ -1,9 +1,87 @@
 import { createUser, deleteUser, getUserById, setUserCatalogPricesPermission } from "@/lib/server/users";
 import type { Colaborador, ColaboradorWithUser } from "@/lib/types";
-import { readJsonBackup, writeJsonBackup } from "./backup";
+import { readJsonBackup, writeJsonBackup, getDataDirForLogs } from "./backup";
 import { getDb } from "./sqlite";
+import fs from "fs";
+import path from "path";
 
 type ColaboradorRow = Record<string, unknown>;
+
+export type PersistenceStatus = {
+  dataDir: string;
+  databaseDirConfigured: boolean;
+  backupFileExists: boolean;
+  colaboradoresInDb: number;
+  colaboradoresInBackup: number;
+};
+
+function sanitizeUserIdForRestore(db: ReturnType<typeof getDb>, userId: unknown): number | null {
+  if (userId == null) return null;
+  const id = Number(userId);
+  if (!Number.isFinite(id)) return null;
+  const exists = db.prepare("SELECT id FROM users WHERE id = ?").get(id);
+  return exists ? id : null;
+}
+
+function sanitizeColaboradorRowForRestore(
+  db: ReturnType<typeof getDb>,
+  row: ColaboradorRow,
+): ColaboradorRow {
+  return {
+    ...row,
+    userId: sanitizeUserIdForRestore(db, row.userId),
+    activo: row.activo === false || row.activo === 0 ? 0 : 1,
+  };
+}
+
+function insertColaboradorRows(db: ReturnType<typeof getDb>, records: ColaboradorRow[]) {
+  const insert = db.prepare(
+    `INSERT INTO colaboradores (
+      id, nombre, puesto, sueldo, telefono, email, fechaIngreso, notas, activo, userId, createdAt, updatedAt
+    ) VALUES (
+      @id, @nombre, @puesto, @sueldo, @telefono, @email, @fechaIngreso, @notas, @activo, @userId, @createdAt, @updatedAt
+    )`,
+  );
+
+  const tx = db.transaction((rows: ColaboradorRow[]) => {
+    for (const row of rows) {
+      const safe = sanitizeColaboradorRowForRestore(db, row);
+      insert.run({
+        id: safe.id,
+        nombre: safe.nombre,
+        puesto: safe.puesto ?? "",
+        sueldo: safe.sueldo ?? null,
+        telefono: safe.telefono ?? null,
+        email: safe.email ?? null,
+        fechaIngreso: safe.fechaIngreso ?? null,
+        notas: safe.notas ?? null,
+        activo: safe.activo ?? 1,
+        userId: safe.userId ?? null,
+        createdAt: safe.createdAt,
+        updatedAt: safe.updatedAt,
+      });
+    }
+  });
+  tx(records);
+}
+
+export function getPersistenceStatus(): PersistenceStatus {
+  ensureColaboradoresTable();
+  const db = getDb();
+  const colaboradoresInDb = (
+    db.prepare("SELECT COUNT(*) as c FROM colaboradores").get() as { c: number }
+  ).c;
+  const backup = readJsonBackup<ColaboradorRow[]>("colaboradores");
+  const backupFile = path.join(getDataDirForLogs(), "backups", "colaboradores.json");
+
+  return {
+    dataDir: getDataDirForLogs(),
+    databaseDirConfigured: Boolean(process.env.DATABASE_DIR),
+    backupFileExists: fs.existsSync(backupFile),
+    colaboradoresInDb,
+    colaboradoresInBackup: backup?.length ?? 0,
+  };
+}
 
 function rowToColaborador(row: Record<string, unknown>): Colaborador {
   return {
@@ -61,33 +139,12 @@ function restoreColaboradoresFromJsonIfEmpty() {
   const backup = readJsonBackup<ColaboradorRow[]>("colaboradores");
   if (!backup?.length) return;
 
-  const insert = db.prepare(
-    `INSERT INTO colaboradores (
-      id, nombre, puesto, sueldo, telefono, email, fechaIngreso, notas, activo, userId, createdAt, updatedAt
-    ) VALUES (
-      @id, @nombre, @puesto, @sueldo, @telefono, @email, @fechaIngreso, @notas, @activo, @userId, @createdAt, @updatedAt
-    )`,
-  );
-
-  const tx = db.transaction((records: ColaboradorRow[]) => {
-    for (const row of records) {
-      insert.run({
-        id: row.id,
-        nombre: row.nombre,
-        puesto: row.puesto ?? "",
-        sueldo: row.sueldo ?? null,
-        telefono: row.telefono ?? null,
-        email: row.email ?? null,
-        fechaIngreso: row.fechaIngreso ?? null,
-        notas: row.notas ?? null,
-        activo: row.activo ?? 1,
-        userId: row.userId ?? null,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      });
-    }
-  });
-  tx(backup);
+  try {
+    insertColaboradorRows(db, backup);
+    console.info(`[colaboradores] Restaurados ${backup.length} registros desde respaldo JSON`);
+  } catch (error) {
+    console.error("[colaboradores] Error al restaurar desde JSON:", error);
+  }
 }
 
 export function restoreColaboradores(records: ColaboradorRow[]) {
@@ -96,35 +153,30 @@ export function restoreColaboradores(records: ColaboradorRow[]) {
   const count = (db.prepare("SELECT COUNT(*) as c FROM colaboradores").get() as { c: number }).c;
   if (count > 0) return;
 
-  const insert = db.prepare(
-    `INSERT INTO colaboradores (
-      id, nombre, puesto, sueldo, telefono, email, fechaIngreso, notas, activo, userId, createdAt, updatedAt
-    ) VALUES (
-      @id, @nombre, @puesto, @sueldo, @telefono, @email, @fechaIngreso, @notas, @activo, @userId, @createdAt, @updatedAt
-    )`,
-  );
-
   const now = new Date().toISOString();
-  const tx = db.transaction((items: ColaboradorRow[]) => {
-    for (const row of items) {
-      insert.run({
-        id: row.id,
-        nombre: row.nombre,
-        puesto: row.puesto ?? "",
-        sueldo: row.sueldo ?? null,
-        telefono: row.telefono ?? null,
-        email: row.email ?? null,
-        fechaIngreso: row.fechaIngreso ?? null,
-        notas: row.notas ?? null,
-        activo: row.activo === false || row.activo === 0 ? 0 : 1,
-        userId: row.userId ?? null,
-        createdAt: row.createdAt ?? now,
-        updatedAt: row.updatedAt ?? now,
-      });
-    }
-  });
-  tx(records);
-  snapshotColaboradoresToJson();
+  const rows = records.map((row) => ({
+    id: row.id,
+    nombre: row.nombre,
+    puesto: row.puesto ?? "",
+    sueldo: row.sueldo ?? null,
+    telefono: row.telefono ?? null,
+    email: row.email ?? null,
+    fechaIngreso: row.fechaIngreso ?? null,
+    notas: row.notas ?? null,
+    activo: row.activo === false || row.activo === 0 ? 0 : 1,
+    userId: row.userId ?? null,
+    createdAt: row.createdAt ?? now,
+    updatedAt: row.updatedAt ?? now,
+  }));
+
+  try {
+    insertColaboradorRows(db, rows);
+    snapshotColaboradoresToJson();
+    console.info(`[colaboradores] Restaurados ${rows.length} registros desde cliente`);
+  } catch (error) {
+    console.error("[colaboradores] Error al restaurar desde cliente:", error);
+    throw error instanceof Error ? error : new Error("No se pudo restaurar colaboradores");
+  }
 }
 
 export function listColaboradores(): ColaboradorWithUser[] {

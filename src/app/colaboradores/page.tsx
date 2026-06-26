@@ -2,6 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  colaboradorToRestoreRecord,
+  loadColaboradoresLocalBackup,
+  mergeColaboradorBackups,
+  saveColaboradoresLocalBackup,
+} from "@/lib/colaboradores-backup";
 import { db } from "@/lib/db";
 import type { ColaboradorWithUser } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -46,30 +52,8 @@ function toPayload(form: ColaboradorForm) {
   };
 }
 
-function colaboradorToRestoreRecord(c: ColaboradorWithUser) {
-  return {
-    id: c.id!,
-    nombre: c.nombre,
-    puesto: c.puesto,
-    sueldo: c.sueldo ?? null,
-    telefono: c.telefono ?? null,
-    email: c.email ?? null,
-    fechaIngreso: c.fechaIngreso
-      ? c.fechaIngreso instanceof Date
-        ? c.fechaIngreso.toISOString().slice(0, 10)
-        : String(c.fechaIngreso).slice(0, 10)
-      : null,
-    notas: c.notas ?? null,
-    activo: c.activo,
-    userId: c.userId ?? null,
-    createdAt:
-      c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
-    updatedAt:
-      c.updatedAt instanceof Date ? c.updatedAt.toISOString() : String(c.updatedAt),
-  };
-}
-
 async function cacheColaboradores(records: ColaboradorWithUser[]) {
+  saveColaboradoresLocalBackup(records);
   await db.transaction("rw", db.colaboradoresCache, async () => {
     await db.colaboradoresCache.clear();
     if (records.length === 0) return;
@@ -93,6 +77,27 @@ export default function ColaboradoresPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState<ColaboradorForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [persistenceWarning, setPersistenceWarning] = useState("");
+  const [hasLocalBackup, setHasLocalBackup] = useState(false);
+
+  const restoreFromLocalBackups = useCallback(async () => {
+    const cached = mergeColaboradorBackups(
+      await db.colaboradoresCache.toArray(),
+      loadColaboradoresLocalBackup(),
+    );
+    if (cached.length === 0) return null;
+
+    const restoreRes = await fetch("/api/colaboradores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "restore",
+        records: cached.map(colaboradorToRestoreRecord),
+      }),
+    });
+    if (!restoreRes.ok) return null;
+    return restoreRes.json();
+  }, []);
 
   const loadColaboradores = useCallback(async () => {
     setLoading(true);
@@ -109,29 +114,25 @@ export default function ColaboradoresPage() {
     }
     let data = await res.json();
     let list: ColaboradorWithUser[] = data.colaboradores;
+    setPersistenceWarning(data.persistenceWarning ?? "");
 
     if (list.length === 0) {
-      const cached = await db.colaboradoresCache.toArray();
-      if (cached.length > 0) {
-        const restoreRes = await fetch("/api/colaboradores", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "restore",
-            records: cached.map(colaboradorToRestoreRecord),
-          }),
-        });
-        if (restoreRes.ok) {
-          data = await restoreRes.json();
-          list = data.colaboradores;
-        }
+      const restored = await restoreFromLocalBackups();
+      if (restored) {
+        list = restored.colaboradores;
       }
     }
+
+    const localBackup = mergeColaboradorBackups(
+      await db.colaboradoresCache.toArray(),
+      loadColaboradoresLocalBackup(),
+    );
+    setHasLocalBackup(localBackup.length > 0);
 
     setColaboradores(list);
     await cacheColaboradores(list);
     setLoading(false);
-  }, [router]);
+  }, [router, restoreFromLocalBackups]);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -303,6 +304,12 @@ export default function ColaboradoresPage() {
           <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
 
+        {persistenceWarning && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {persistenceWarning}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="mb-6 space-y-4 rounded-lg border bg-slate-50 p-4">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-slate-800">
@@ -380,7 +387,25 @@ export default function ColaboradoresPage() {
         {loading ? (
           <p className="text-sm text-slate-500">Cargando...</p>
         ) : colaboradores.length === 0 ? (
-          <p className="text-sm text-slate-500">Aún no hay colaboradores registrados.</p>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500">Aún no hay colaboradores registrados.</p>
+            {hasLocalBackup && (
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  const restored = await restoreFromLocalBackups();
+                  if (restored) {
+                    setColaboradores(restored.colaboradores);
+                    await cacheColaboradores(restored.colaboradores);
+                  } else {
+                    setError("No se pudo restaurar desde este dispositivo");
+                  }
+                }}
+              >
+                Restaurar desde este dispositivo
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="space-y-3">
             {colaboradores.map((colaborador) => (
