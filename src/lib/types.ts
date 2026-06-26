@@ -222,3 +222,50 @@ export type Colaborador = {
 export type ColaboradorWithUser = Colaborador & {
   username?: string;
 };
+
+export type FinanceMovementType = "ingreso" | "egreso";
+
+export type FinanceCategory =
+  | "anticipo_obra"
+  | "cobro_liquidacion"
+  | "cobro_parcial"
+  | "otro_ingreso"
+  | "pago_colaborador"
+  | "gasto_obra"
+  | "gasto_operativo"
+  | "material"
+  | "otro_egreso";
+
+export type PaymentMethod = "efectivo" | "transferencia" | "tarjeta" | "otro";
+
+export type CollaboratorPaymentType = "por_obra" | "por_dia" | "por_proyecto" | "nomina_fija";
+
+export type FinanceMovement = {
+  id?: number;
+  tipo: FinanceMovementType;
+  categoria: FinanceCategory;
+  monto: number;
+  fecha: Date;
+  concepto: string;
+  formaPago: PaymentMethod;
+  clientId?: number;
+  quoteId?: number;
+  serviceSheetId?: number;
+  colaboradorId?: number;
+  colaboradorPaymentType?: CollaboratorPaymentType;
+  notas?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type FinanceMovementWithRefs = FinanceMovement & {
+  clientNombre?: string;
+  quoteNumero?: string;
+  colaboradorNombre?: string;
+};
+
+export type FinanceSummary = {
+  ingresos: number;
+  egresos: number;
+  balance: number;
+};

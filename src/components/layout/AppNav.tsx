@@ -20,7 +20,10 @@ const baseNavItems = [
 ];
 
 const accountNavItem = { href: "/perfil", label: "Mi cuenta", icon: "👤" };
-const adminNavItem = { href: "/colaboradores", label: "Colaboradores", icon: "👷" };
+const adminNavItems = [
+  { href: "/finanzas", label: "Finanzas", icon: "📊" },
+  { href: "/colaboradores", label: "Colaboradores", icon: "👷" },
+];
 
 export function AppNav() {
   const pathname = usePathname();
@@ -29,7 +32,7 @@ export function AppNav() {
 
   const items =
     role === "admin"
-      ? [...baseNavItems, accountNavItem, adminNavItem]
+      ? [...baseNavItems, accountNavItem, ...adminNavItems]
       : [...baseNavItems, accountNavItem];
 
   async function handleLogout() {
