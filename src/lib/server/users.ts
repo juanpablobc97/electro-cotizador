@@ -11,8 +11,21 @@ function rowToUser(row: Record<string, unknown>): User {
     id: row.id as number,
     username: row.username as string,
     role: row.role as UserRole,
+    canEditCatalogPrices: Boolean(row.canEditCatalogPrices),
     createdAt: new Date(row.createdAt as string),
   };
+}
+
+function ensureUserColumns() {
+  const db = getDb();
+  const columns = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map(
+    (column) => column.name,
+  );
+  if (!columns.includes("canEditCatalogPrices")) {
+    db.exec(
+      `ALTER TABLE users ADD COLUMN canEditCatalogPrices INTEGER NOT NULL DEFAULT 0`,
+    );
+  }
 }
 
 export function ensureUsersTable() {
@@ -26,6 +39,7 @@ export function ensureUsersTable() {
       createdAt TEXT NOT NULL
     );
   `);
+  ensureUserColumns();
 }
 
 export function seedAdminUserIfEmpty() {
@@ -50,11 +64,13 @@ export function seedAdminUserIfEmpty() {
 export function verifyUserCredentials(
   username: string,
   password: string,
-): { id: number; username: string; role: UserRole } | null {
+): { id: number; username: string; role: UserRole; canEditCatalogPrices: boolean } | null {
   seedAdminUserIfEmpty();
   const db = getDb();
   const row = db
-    .prepare("SELECT id, username, passwordHash, role FROM users WHERE username = ? COLLATE NOCASE")
+    .prepare(
+      "SELECT id, username, passwordHash, role, canEditCatalogPrices FROM users WHERE username = ? COLLATE NOCASE",
+    )
     .get(username) as Record<string, unknown> | undefined;
 
   if (!row) return null;
@@ -64,22 +80,25 @@ export function verifyUserCredentials(
     id: row.id as number,
     username: row.username as string,
     role: row.role as UserRole,
+    canEditCatalogPrices: Boolean(row.canEditCatalogPrices),
   };
 }
 
 export function listUsers(): User[] {
   seedAdminUserIfEmpty();
   const db = getDb();
-  return (db.prepare("SELECT id, username, role, createdAt FROM users ORDER BY username").all() as Record<string, unknown>[]).map(
-    rowToUser,
-  );
+  return (
+    db
+      .prepare("SELECT id, username, role, canEditCatalogPrices, createdAt FROM users ORDER BY username")
+      .all() as Record<string, unknown>[]
+  ).map(rowToUser);
 }
 
 export function getUserById(id: number): User | null {
   seedAdminUserIfEmpty();
   const db = getDb();
   const row = db
-    .prepare("SELECT id, username, role, createdAt FROM users WHERE id = ?")
+    .prepare("SELECT id, username, role, canEditCatalogPrices, createdAt FROM users WHERE id = ?")
     .get(id) as Record<string, unknown> | undefined;
   return row ? rowToUser(row) : null;
 }
@@ -154,6 +173,21 @@ export function changeOwnPassword(
   const db = getDb();
   db.prepare("UPDATE users SET passwordHash = ? WHERE id = ?").run(
     hashPassword(newPassword),
+    userId,
+  );
+}
+
+export function setUserCatalogPricesPermission(userId: number, enabled: boolean) {
+  seedAdminUserIfEmpty();
+  const user = getUserById(userId);
+  if (!user) throw new Error("Usuario no encontrado");
+  if (user.role === "admin") {
+    throw new Error("Los administradores ya tienen acceso completo al catálogo");
+  }
+
+  const db = getDb();
+  db.prepare("UPDATE users SET canEditCatalogPrices = ? WHERE id = ?").run(
+    enabled ? 1 : 0,
     userId,
   );
 }

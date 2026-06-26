@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getPermissions } from "@/lib/auth/permissions";
+import { getPermissionsForUser } from "@/lib/auth/permissions";
 import { getSessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
 import { createSessionTokenNode, getSessionUser } from "@/lib/auth/session-node";
 import { changeOwnPassword, verifyUserCredentials } from "@/lib/server/users";
@@ -20,7 +20,7 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  return NextResponse.json({ user, permissions: getPermissions(user.role) });
+  return NextResponse.json({ user, permissions: getPermissionsForUser(user) });
 }
 
 export async function POST(request: Request) {
@@ -57,7 +57,12 @@ export async function POST(request: Request) {
     const token = createSessionTokenNode(account.id);
     const response = NextResponse.json({
       ok: true,
-      user: { id: account.id, username: account.username, role: account.role },
+      user: {
+        id: account.id,
+        username: account.username,
+        role: account.role,
+        canEditCatalogPrices: account.canEditCatalogPrices,
+      },
     });
     response.cookies.set(SESSION_COOKIE, token, getSessionCookieOptions());
     return response;

@@ -335,6 +335,13 @@ export const dataStore = {
       const { record } = await postJson({ action: "upsert", table: "materials", record: data });
       await persistAndSync(db.materials, record);
     },
+    async updatePrice(id: number, precioUnitario: number) {
+      const existing = await db.materials.get(id);
+      if (!existing) throw new Error("Material no encontrado");
+      const record = { ...existing, precioUnitario, updatedAt: new Date() };
+      const { record: saved } = await postJson({ action: "upsert", table: "materials", record });
+      await persistAndSync(db.materials, saved);
+    },
     async delete(id: number) {
       await postJson({ action: "delete", table: "materials", id });
       await pullFromServer().catch(() => undefined);

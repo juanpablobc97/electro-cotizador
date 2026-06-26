@@ -201,6 +201,7 @@ export type User = {
   id: number;
   username: string;
   role: UserRole;
+  canEditCatalogPrices?: boolean;
   createdAt: Date;
 };
 
@@ -221,6 +222,7 @@ export type Colaborador = {
 
 export type ColaboradorWithUser = Colaborador & {
   username?: string;
+  canEditCatalogPrices?: boolean;
 };
 
 export type FinanceMovementType = "ingreso" | "egreso";

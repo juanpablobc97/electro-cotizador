@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { AppPermissions } from "@/lib/auth/permissions";
-import { getPermissions } from "@/lib/auth/permissions";
 import type { User, UserRole } from "@/lib/types";
 
 type SessionState = {
@@ -32,7 +31,7 @@ export function useSession(): SessionState {
         setState({
           user,
           role,
-          permissions: role ? getPermissions(role) : null,
+          permissions: (data?.permissions as AppPermissions | undefined) ?? null,
           loading: false,
         });
       })

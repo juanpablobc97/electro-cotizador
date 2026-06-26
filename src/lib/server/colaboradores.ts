@@ -1,4 +1,4 @@
-import { createUser, deleteUser, getUserById } from "@/lib/server/users";
+import { createUser, deleteUser, getUserById, setUserCatalogPricesPermission } from "@/lib/server/users";
 import type { Colaborador, ColaboradorWithUser } from "@/lib/types";
 import { readJsonBackup, writeJsonBackup } from "./backup";
 import { getDb } from "./sqlite";
@@ -132,7 +132,7 @@ export function listColaboradores(): ColaboradorWithUser[] {
   const db = getDb();
   const rows = db
     .prepare(
-      `SELECT c.*, u.username
+      `SELECT c.*, u.username, u.canEditCatalogPrices
        FROM colaboradores c
        LEFT JOIN users u ON u.id = c.userId
        ORDER BY c.activo DESC, c.nombre COLLATE NOCASE`,
@@ -142,6 +142,7 @@ export function listColaboradores(): ColaboradorWithUser[] {
   return rows.map((row) => ({
     ...rowToColaborador(row),
     username: (row.username as string) || undefined,
+    canEditCatalogPrices: Boolean(row.canEditCatalogPrices),
   }));
 }
 
@@ -277,6 +278,16 @@ export function getColaboradorByUserId(userId: number): Colaborador | null {
     | Record<string, unknown>
     | undefined;
   return row ? rowToColaborador(row) : null;
+}
+
+export function setColaboradorCatalogPricesPermission(colaboradorId: number, enabled: boolean) {
+  ensureColaboradoresTable();
+  const colaborador = getColaboradorById(colaboradorId);
+  if (!colaborador) throw new Error("Colaborador no encontrado");
+  if (!colaborador.userId) {
+    throw new Error("Este colaborador no tiene acceso a la app");
+  }
+  setUserCatalogPricesPermission(colaborador.userId, enabled);
 }
 
 export function getLinkedUser(colaboradorId: number) {

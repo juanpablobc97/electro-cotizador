@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
-import type { MaterialUnit } from "@/lib/types";
+import type { Material, MaterialUnit } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
@@ -15,9 +15,12 @@ import { Select } from "@/components/ui/Select";
 export default function CatalogoPage() {
   const { permissions } = useSession();
   const canManage = permissions?.canManageCatalog ?? false;
+  const canEditPrices = permissions?.canEditCatalogPrices ?? false;
   const materials = useLiveQuery(() => db.materials.orderBy("categoria").toArray()) ?? [];
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
+  const [priceDraft, setPriceDraft] = useState("");
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,6 +48,24 @@ export default function CatalogoPage() {
     await dataStore.materials.delete(id);
   }
 
+  function startPriceEdit(material: Material) {
+    setEditingPriceId(material.id!);
+    setPriceDraft(String(material.precioUnitario));
+  }
+
+  async function savePriceEdit(materialId: number) {
+    const precio = Number(priceDraft);
+    if (!Number.isFinite(precio) || precio < 0) return;
+    setSaving(true);
+    try {
+      await dataStore.materials.updatePrice(materialId, precio);
+      setEditingPriceId(null);
+      setPriceDraft("");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const grouped = materials.reduce<Record<string, typeof materials>>((acc, m) => {
     if (!acc[m.categoria]) acc[m.categoria] = [];
     acc[m.categoria].push(m);
@@ -56,7 +77,13 @@ export default function CatalogoPage() {
       <Card>
         <CardHeader
           title="Catálogo de materiales"
-          subtitle="Precios reutilizables para cotizaciones"
+          subtitle={
+            canManage
+              ? "Precios reutilizables para cotizaciones"
+              : canEditPrices
+                ? "Puedes actualizar precios cuando cambien en el mercado"
+                : "Consulta de precios para cotizaciones"
+          }
           action={
             canManage ? (
               <Button onClick={() => setShowForm(!showForm)}>
@@ -114,24 +141,70 @@ export default function CatalogoPage() {
                   {items.map((material) => (
                     <div
                       key={material.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
                     >
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium">{material.nombre}</p>
                         <p className="text-xs text-slate-500">
-                          {material.codigo} · {formatCurrency(material.precioUnitario)}/
-                          {material.unidad}
+                          {material.codigo}
+                          {editingPriceId !== material.id && (
+                            <>
+                              {" "}
+                              · {formatCurrency(material.precioUnitario)}/{material.unidad}
+                            </>
+                          )}
                         </p>
                       </div>
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(material.id!)}
-                        >
-                          Eliminar
-                        </Button>
-                      )}
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {canEditPrices && editingPriceId === material.id ? (
+                          <>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={priceDraft}
+                              onChange={(e) => setPriceDraft(e.target.value)}
+                              className="w-28"
+                              aria-label="Nuevo precio"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => savePriceEdit(material.id!)}
+                              disabled={saving}
+                            >
+                              Guardar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingPriceId(null);
+                                setPriceDraft("");
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {canEditPrices && (
+                              <Button size="sm" variant="secondary" onClick={() => startPriceEdit(material)}>
+                                Editar precio
+                              </Button>
+                            )}
+                            {canManage && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDelete(material.id!)}
+                              >
+                                Eliminar
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

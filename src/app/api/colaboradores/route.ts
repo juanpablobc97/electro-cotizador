@@ -8,6 +8,7 @@ import {
   getLinkedUser,
   listColaboradores,
   restoreColaboradores,
+  setColaboradorCatalogPricesPermission,
   updateColaborador,
 } from "@/lib/server/colaboradores";
 import { resetUserPassword } from "@/lib/server/users";
@@ -43,6 +44,11 @@ const actionSchema = z.discriminatedUnion("action", [
     action: z.literal("reset-password"),
     id: z.number(),
     password: z.string().min(4),
+  }),
+  z.object({
+    action: z.literal("set-catalog-prices"),
+    id: z.number(),
+    enabled: z.boolean(),
   }),
   z.object({
     action: z.literal("restore"),
@@ -103,6 +109,11 @@ export async function POST(request: Request) {
       }
       resetUserPassword(linked.id, body.password);
       return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "set-catalog-prices") {
+      setColaboradorCatalogPricesPermission(body.id, body.enabled);
+      return NextResponse.json({ colaborador: listColaboradores().find((c) => c.id === body.id) });
     }
 
     if (body.action === "restore") {

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getPermissions } from "@/lib/auth/permissions";
+import { getPermissionsForUser, canModifyMaterial } from "@/lib/auth/permissions";
 import { getSessionUser, requireSession } from "@/lib/auth/session-node";
 import {
   deleteClientCascade,
   deleteRecord,
   getFullSyncPayload,
+  getMaterialById,
   mergeLocalData,
   seedDefaultMaterialsIfEmpty,
   upsertRecord,
@@ -39,7 +40,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireSession();
-    const permissions = getPermissions(user.role);
+    const permissions = getPermissionsForUser(user);
     const body = await request.json();
 
     if (body.action === "merge") {
@@ -53,8 +54,14 @@ export async function POST(request: Request) {
 
     if (body.action === "upsert") {
       const action = body as UpsertAction;
-      if (action.table === "materials" && !permissions.canManageCatalog) {
-        return NextResponse.json({ error: "No tienes permiso para modificar el catálogo" }, { status: 403 });
+      if (action.table === "materials") {
+        const existing = action.record.id ? getMaterialById(action.record.id) : null;
+        if (!canModifyMaterial(user, existing, action.record)) {
+          return NextResponse.json(
+            { error: "No tienes permiso para modificar el catálogo" },
+            { status: 403 },
+          );
+        }
       }
       const record = upsertRecord(action);
       return NextResponse.json({ record });

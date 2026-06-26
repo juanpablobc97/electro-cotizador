@@ -242,6 +242,25 @@ export default function ColaboradoresPage() {
     alert("Contraseña actualizada");
   }
 
+  async function handleToggleCatalogPrices(colaborador: ColaboradorWithUser, enabled: boolean) {
+    const res = await fetch("/api/colaboradores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "set-catalog-prices",
+        id: colaborador.id,
+        enabled,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error ?? "No se pudo actualizar el permiso");
+      return;
+    }
+    setError("");
+    await loadColaboradores();
+  }
+
   async function handleDelete(colaborador: ColaboradorWithUser) {
     if (!confirm(`¿Eliminar el registro de ${colaborador.nombre}?`)) return;
 
@@ -409,6 +428,23 @@ export default function ColaboradoresPage() {
                         ? `Acceso app: ${colaborador.username}`
                         : "Sin acceso a la app"}
                     </p>
+                    {colaborador.username && (
+                      <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(colaborador.canEditCatalogPrices)}
+                          onChange={(e) =>
+                            handleToggleCatalogPrices(colaborador, e.target.checked)
+                          }
+                        />
+                        Puede actualizar precios del catálogo
+                      </label>
+                    )}
+                    {colaborador.username && colaborador.canEditCatalogPrices && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        El colaborador debe recargar la app para que aplique el permiso.
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -440,7 +476,11 @@ export default function ColaboradoresPage() {
         <ul className="list-inside list-disc space-y-2 text-sm text-slate-600">
           <li>Ver y agregar clientes, levantamientos, cotizaciones y hojas de servicio.</li>
           <li>Editar registros existentes, pero <strong>no eliminar</strong> nada.</li>
-          <li>Consultar el catálogo de materiales para cotizar (sin modificar precios).</li>
+          <li>Consultar el catálogo de materiales para cotizar.</li>
+          <li>
+            Si lo autorizas, ciertos colaboradores pueden <strong>actualizar precios</strong> del
+            catálogo (sin agregar ni eliminar materiales).
+          </li>
           <li>Sin acceso a este apartado de colaboradores ni al inventario de herramienta (próximamente).</li>
         </ul>
       </Card>

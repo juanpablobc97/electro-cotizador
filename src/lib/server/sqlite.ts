@@ -198,6 +198,14 @@ function rowToMaterial(row: Record<string, unknown>): Material {
   };
 }
 
+export function getMaterialById(id: number): Material | null {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM materials WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? rowToMaterial(row) : null;
+}
+
 function rowToSurvey(row: Record<string, unknown>): Survey {
   return {
     id: row.id as number,
