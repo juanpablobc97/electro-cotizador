@@ -1,4 +1,4 @@
-const CACHE_NAME = "bernal-cotizador-v5";
+const CACHE_NAME = "bernal-cotizador-v6";
 const STATIC_ASSETS = ["/manifest.json", "/logo.png"];
 
 self.addEventListener("install", (event) => {

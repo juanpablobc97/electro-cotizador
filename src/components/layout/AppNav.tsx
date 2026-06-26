@@ -77,9 +77,9 @@ export function AppNav() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-brand-navy-light bg-brand-navy md:pl-64">
+      <header className="sticky top-0 z-20 border-b border-brand-navy-light bg-brand-navy min-[744px]:pl-64">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5">
-          <Link href="/" className="flex items-center gap-3 md:hidden">
+          <Link href="/" className="flex items-center gap-3 min-[744px]:hidden">
             <Image
               src={LOGO_PATH}
               alt="Bernal Instalaciones Eléctricas"
@@ -89,13 +89,13 @@ export function AppNav() {
               priority
             />
           </Link>
-          <div className="hidden md:block" />
+          <div className="hidden min-[744px]:block" />
           <div className="flex items-center gap-2">
             <SyncStatusBadge />
             <Button
               size="sm"
               variant="ghost"
-              className="hidden text-white/70 hover:bg-white/10 hover:text-white md:inline-flex"
+              className="hidden text-white/70 hover:bg-white/10 hover:text-white min-[744px]:inline-flex"
               onClick={handleLogout}
             >
               Salir
@@ -105,7 +105,7 @@ export function AppNav() {
       </header>
 
       {/* Menú móvil: una sola fila + panel "Más" */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-brand-navy-light bg-brand-navy pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-brand-navy-light bg-brand-navy pb-[env(safe-area-inset-bottom)] min-[744px]:hidden">
         {moreOpen && (
           <>
             <button
@@ -175,7 +175,7 @@ export function AppNav() {
         </div>
       </nav>
 
-      <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-64 md:flex-col md:border-r md:border-brand-navy-light md:bg-brand-navy">
+      <aside className="hidden min-[744px]:fixed min-[744px]:inset-y-0 min-[744px]:left-0 min-[744px]:flex min-[744px]:w-64 min-[744px]:flex-col min-[744px]:border-r min-[744px]:border-brand-navy-light min-[744px]:bg-brand-navy">
         <Link href="/" className="border-b border-brand-navy-light px-4 py-5">
           <Image
             src={LOGO_PATH}

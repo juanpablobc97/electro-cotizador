@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <AppNav />
-      <main className="mx-auto min-h-screen max-w-6xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:ml-64 md:pb-8">
+      <main className="mx-auto min-h-screen max-w-6xl px-4 pt-4 max-[743px]:pb-[calc(5.5rem+env(safe-area-inset-bottom))] min-[744px]:ml-64 min-[744px]:pb-8">
         <SyncOfflineHelp />
         {children}
       </main>
