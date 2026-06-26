@@ -1,6 +1,9 @@
 import { createUser, deleteUser, getUserById } from "@/lib/server/users";
 import type { Colaborador, ColaboradorWithUser } from "@/lib/types";
+import { readJsonBackup, writeJsonBackup } from "./backup";
 import { getDb } from "./sqlite";
+
+type ColaboradorRow = Record<string, unknown>;
 
 function rowToColaborador(row: Record<string, unknown>): Colaborador {
   return {
@@ -38,6 +41,90 @@ export function ensureColaboradoresTable() {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE SET NULL
     );
   `);
+  restoreColaboradoresFromJsonIfEmpty();
+}
+
+function snapshotColaboradoresToJson() {
+  const db = getDb();
+  const rows = db.prepare("SELECT * FROM colaboradores ORDER BY id").all() as ColaboradorRow[];
+  if (rows.length > 0) writeJsonBackup("colaboradores", rows);
+}
+
+function restoreColaboradoresFromJsonIfEmpty() {
+  const db = getDb();
+  const count = (db.prepare("SELECT COUNT(*) as c FROM colaboradores").get() as { c: number }).c;
+  if (count > 0) {
+    snapshotColaboradoresToJson();
+    return;
+  }
+
+  const backup = readJsonBackup<ColaboradorRow[]>("colaboradores");
+  if (!backup?.length) return;
+
+  const insert = db.prepare(
+    `INSERT INTO colaboradores (
+      id, nombre, puesto, sueldo, telefono, email, fechaIngreso, notas, activo, userId, createdAt, updatedAt
+    ) VALUES (
+      @id, @nombre, @puesto, @sueldo, @telefono, @email, @fechaIngreso, @notas, @activo, @userId, @createdAt, @updatedAt
+    )`,
+  );
+
+  const tx = db.transaction((records: ColaboradorRow[]) => {
+    for (const row of records) {
+      insert.run({
+        id: row.id,
+        nombre: row.nombre,
+        puesto: row.puesto ?? "",
+        sueldo: row.sueldo ?? null,
+        telefono: row.telefono ?? null,
+        email: row.email ?? null,
+        fechaIngreso: row.fechaIngreso ?? null,
+        notas: row.notas ?? null,
+        activo: row.activo ?? 1,
+        userId: row.userId ?? null,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+    }
+  });
+  tx(backup);
+}
+
+export function restoreColaboradores(records: ColaboradorRow[]) {
+  ensureColaboradoresTable();
+  const db = getDb();
+  const count = (db.prepare("SELECT COUNT(*) as c FROM colaboradores").get() as { c: number }).c;
+  if (count > 0) return;
+
+  const insert = db.prepare(
+    `INSERT INTO colaboradores (
+      id, nombre, puesto, sueldo, telefono, email, fechaIngreso, notas, activo, userId, createdAt, updatedAt
+    ) VALUES (
+      @id, @nombre, @puesto, @sueldo, @telefono, @email, @fechaIngreso, @notas, @activo, @userId, @createdAt, @updatedAt
+    )`,
+  );
+
+  const now = new Date().toISOString();
+  const tx = db.transaction((items: ColaboradorRow[]) => {
+    for (const row of items) {
+      insert.run({
+        id: row.id,
+        nombre: row.nombre,
+        puesto: row.puesto ?? "",
+        sueldo: row.sueldo ?? null,
+        telefono: row.telefono ?? null,
+        email: row.email ?? null,
+        fechaIngreso: row.fechaIngreso ?? null,
+        notas: row.notas ?? null,
+        activo: row.activo === false || row.activo === 0 ? 0 : 1,
+        userId: row.userId ?? null,
+        createdAt: row.createdAt ?? now,
+        updatedAt: row.updatedAt ?? now,
+      });
+    }
+  });
+  tx(records);
+  snapshotColaboradoresToJson();
 }
 
 export function listColaboradores(): ColaboradorWithUser[] {
@@ -109,6 +196,7 @@ export function createColaborador(input: ColaboradorInput): Colaborador {
       updatedAt: now,
     });
 
+  snapshotColaboradoresToJson();
   return getColaboradorById(Number(result.lastInsertRowid))!;
 }
 
@@ -138,6 +226,7 @@ export function updateColaborador(id: number, input: ColaboradorInput): Colabora
     updatedAt: now,
   });
 
+  snapshotColaboradoresToJson();
   return getColaboradorById(id)!;
 }
 
@@ -159,6 +248,7 @@ export function createUserForColaborador(
     colaboradorId,
   );
 
+  snapshotColaboradoresToJson();
   return user;
 }
 
@@ -177,6 +267,7 @@ export function deleteColaborador(id: number, requesterId: number, removeUser = 
   }
 
   db.prepare("DELETE FROM colaboradores WHERE id = ?").run(id);
+  snapshotColaboradoresToJson();
 }
 
 export function getColaboradorByUserId(userId: number): Colaborador | null {

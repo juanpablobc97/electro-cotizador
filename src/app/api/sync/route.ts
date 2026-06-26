@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPermissions } from "@/lib/auth/permissions";
-import { requireSession } from "@/lib/auth/session-node";
+import { getSessionUser, requireSession } from "@/lib/auth/session-node";
 import {
   deleteClientCascade,
   deleteRecord,
@@ -11,7 +11,7 @@ import {
   type DeleteAction,
   type UpsertAction,
 } from "@/lib/server/sqlite";
-import { ensureColaboradoresTable } from "@/lib/server/colaboradores";
+import { ensureColaboradoresTable, listColaboradores } from "@/lib/server/colaboradores";
 import { seedAdminUserIfEmpty } from "@/lib/server/users";
 
 export const runtime = "nodejs";
@@ -21,7 +21,15 @@ export async function GET() {
     seedAdminUserIfEmpty();
     ensureColaboradoresTable();
     seedDefaultMaterialsIfEmpty();
-    return NextResponse.json(getFullSyncPayload());
+    const payload = getFullSyncPayload();
+    const user = await getSessionUser();
+    if (user?.role === "admin") {
+      return NextResponse.json({
+        ...payload,
+        colaboradores: listColaboradores(),
+      });
+    }
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Sync GET error:", error);
     return NextResponse.json({ error: "No se pudo leer la base de datos" }, { status: 500 });

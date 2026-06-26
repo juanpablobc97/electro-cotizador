@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { db } from "@/lib/db";
 import type { ColaboradorWithUser } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useSession } from "@/hooks/useSession";
@@ -45,6 +46,44 @@ function toPayload(form: ColaboradorForm) {
   };
 }
 
+function colaboradorToRestoreRecord(c: ColaboradorWithUser) {
+  return {
+    id: c.id!,
+    nombre: c.nombre,
+    puesto: c.puesto,
+    sueldo: c.sueldo ?? null,
+    telefono: c.telefono ?? null,
+    email: c.email ?? null,
+    fechaIngreso: c.fechaIngreso
+      ? c.fechaIngreso instanceof Date
+        ? c.fechaIngreso.toISOString().slice(0, 10)
+        : String(c.fechaIngreso).slice(0, 10)
+      : null,
+    notas: c.notas ?? null,
+    activo: c.activo,
+    userId: c.userId ?? null,
+    createdAt:
+      c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
+    updatedAt:
+      c.updatedAt instanceof Date ? c.updatedAt.toISOString() : String(c.updatedAt),
+  };
+}
+
+async function cacheColaboradores(records: ColaboradorWithUser[]) {
+  await db.transaction("rw", db.colaboradoresCache, async () => {
+    await db.colaboradoresCache.clear();
+    if (records.length === 0) return;
+    await db.colaboradoresCache.bulkPut(
+      records.map((c) => ({
+        ...c,
+        fechaIngreso: c.fechaIngreso ? new Date(c.fechaIngreso) : undefined,
+        createdAt: new Date(c.createdAt),
+        updatedAt: new Date(c.updatedAt),
+      })),
+    );
+  });
+}
+
 export default function ColaboradoresPage() {
   const router = useRouter();
   const { permissions, loading: sessionLoading } = useSession();
@@ -68,8 +107,29 @@ export default function ColaboradoresPage() {
       setLoading(false);
       return;
     }
-    const data = await res.json();
-    setColaboradores(data.colaboradores);
+    let data = await res.json();
+    let list: ColaboradorWithUser[] = data.colaboradores;
+
+    if (list.length === 0) {
+      const cached = await db.colaboradoresCache.toArray();
+      if (cached.length > 0) {
+        const restoreRes = await fetch("/api/colaboradores", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "restore",
+            records: cached.map(colaboradorToRestoreRecord),
+          }),
+        });
+        if (restoreRes.ok) {
+          data = await restoreRes.json();
+          list = data.colaboradores;
+        }
+      }
+    }
+
+    setColaboradores(list);
+    await cacheColaboradores(list);
     setLoading(false);
   }, [router]);
 

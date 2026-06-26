@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { Client, Material, Quote, ServiceSheet, Survey } from "@/lib/types";
+import type { Client, ColaboradorWithUser, Material, Quote, ServiceSheet, Survey } from "@/lib/types";
 
 export type SyncPayload = {
   clients: Client[];
@@ -7,6 +7,7 @@ export type SyncPayload = {
   surveys: Survey[];
   quotes: Quote[];
   serviceSheets: ServiceSheet[];
+  colaboradores?: ColaboradorWithUser[];
   syncedAt: string;
 };
 
@@ -94,6 +95,63 @@ function reviveDates<T extends Record<string, unknown>>(record: T, dateFields: s
   return copy as T;
 }
 
+function normalizeColaborador(c: ColaboradorWithUser): ColaboradorWithUser {
+  return {
+    ...c,
+    fechaIngreso: c.fechaIngreso ? new Date(c.fechaIngreso) : undefined,
+    createdAt: new Date(c.createdAt),
+    updatedAt: new Date(c.updatedAt),
+  };
+}
+
+function colaboradorToRestoreRecord(c: ColaboradorWithUser) {
+  return {
+    id: c.id!,
+    nombre: c.nombre,
+    puesto: c.puesto,
+    sueldo: c.sueldo ?? null,
+    telefono: c.telefono ?? null,
+    email: c.email ?? null,
+    fechaIngreso: c.fechaIngreso
+      ? c.fechaIngreso instanceof Date
+        ? c.fechaIngreso.toISOString().slice(0, 10)
+        : String(c.fechaIngreso).slice(0, 10)
+      : null,
+    notas: c.notas ?? null,
+    activo: c.activo,
+    userId: c.userId ?? null,
+    createdAt:
+      c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
+    updatedAt:
+      c.updatedAt instanceof Date ? c.updatedAt.toISOString() : String(c.updatedAt),
+  };
+}
+
+async function syncColaboradoresCache(colaboradores: ColaboradorWithUser[] | undefined) {
+  if (colaboradores === undefined) return;
+
+  if (colaboradores.length > 0) {
+    await db.transaction("rw", db.colaboradoresCache, async () => {
+      await db.colaboradoresCache.clear();
+      await db.colaboradoresCache.bulkPut(colaboradores.map(normalizeColaborador));
+    });
+    return;
+  }
+
+  const cached = await db.colaboradoresCache.toArray();
+  if (cached.length === 0) return;
+
+  const response = await fetch("/api/colaboradores", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "restore",
+      records: cached.map(colaboradorToRestoreRecord),
+    }),
+  });
+  if (!response.ok) return;
+}
+
 function normalizePayload(payload: SyncPayload): SyncPayload {
   return {
     clients: payload.clients.map((c) => reviveDates(c, ["createdAt", "updatedAt"])),
@@ -112,6 +170,7 @@ function normalizePayload(payload: SyncPayload): SyncPayload {
     serviceSheets: payload.serviceSheets.map((s) =>
       reviveDates(s, ["fecha", "createdAt", "updatedAt"]),
     ),
+    colaboradores: payload.colaboradores?.map(normalizeColaborador),
     syncedAt: payload.syncedAt,
   };
 }
@@ -198,7 +257,14 @@ export async function pullFromServer() {
   setStatus("syncing");
   try {
     await mergeLocalOnceIfNeeded();
-    const payload = await fetchSyncPayload();
+    let payload = normalizePayload(await fetchSyncPayload());
+    await syncColaboradoresCache(payload.colaboradores);
+    if (payload.colaboradores !== undefined && payload.colaboradores.length === 0) {
+      const cached = await db.colaboradoresCache.toArray();
+      if (cached.length > 0) {
+        payload = normalizePayload(await fetchSyncPayload());
+      }
+    }
     await applyPayloadToDexie(payload);
     setStatus("online", payload.syncedAt);
     return payload;

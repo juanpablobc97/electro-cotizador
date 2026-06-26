@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Client, Material, Quote, ServiceSheet, Survey } from "./types";
+import type { Client, ColaboradorWithUser, Material, Quote, ServiceSheet, Survey } from "./types";
 
 const db = new Dexie("ElectroCotizadorDB") as Dexie & {
   clients: EntityTable<Client, "id">;
@@ -7,6 +7,7 @@ const db = new Dexie("ElectroCotizadorDB") as Dexie & {
   surveys: EntityTable<Survey, "id">;
   quotes: EntityTable<Quote, "id">;
   serviceSheets: EntityTable<ServiceSheet, "id">;
+  colaboradoresCache: EntityTable<ColaboradorWithUser, "id">;
 };
 
 db.version(1).stores({
@@ -30,6 +31,15 @@ db.version(3).stores({
   surveys: "++id, clientId, estado, fecha, createdAt",
   quotes: "++id, clientId, surveyId, numero, estado, fecha, createdAt",
   serviceSheets: "++id, clientId, quoteId, numero, fecha, tipoServicio, createdAt",
+});
+
+db.version(4).stores({
+  clients: "++id, nombre, telefono, createdAt",
+  materials: "++id, codigo, nombre, categoria, createdAt",
+  surveys: "++id, clientId, estado, fecha, createdAt",
+  quotes: "++id, clientId, surveyId, numero, estado, fecha, createdAt",
+  serviceSheets: "++id, clientId, quoteId, numero, fecha, tipoServicio, createdAt",
+  colaboradoresCache: "id, nombre, activo",
 });
 
 export async function seedDefaultMaterials() {

@@ -7,6 +7,7 @@ import {
   deleteColaborador,
   getLinkedUser,
   listColaboradores,
+  restoreColaboradores,
   updateColaborador,
 } from "@/lib/server/colaboradores";
 import { resetUserPassword } from "@/lib/server/users";
@@ -42,6 +43,25 @@ const actionSchema = z.discriminatedUnion("action", [
     action: z.literal("reset-password"),
     id: z.number(),
     password: z.string().min(4),
+  }),
+  z.object({
+    action: z.literal("restore"),
+    records: z.array(
+      z.object({
+        id: z.number(),
+        nombre: z.string().min(1),
+        puesto: z.string().optional(),
+        sueldo: z.number().optional().nullable(),
+        telefono: z.string().optional().nullable(),
+        email: z.string().optional().nullable(),
+        fechaIngreso: z.string().optional().nullable(),
+        notas: z.string().optional().nullable(),
+        activo: z.boolean().optional(),
+        userId: z.number().optional().nullable(),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+      }),
+    ),
   }),
 ]);
 
@@ -83,6 +103,11 @@ export async function POST(request: Request) {
       }
       resetUserPassword(linked.id, body.password);
       return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "restore") {
+      restoreColaboradores(body.records);
+      return NextResponse.json({ colaboradores: listColaboradores() });
     }
 
     const payload = {
