@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { LOGO_PATH } from "@/lib/branding";
 import { useSession } from "@/hooks/useSession";
 import { CompanyContact } from "@/components/CompanyContact";
@@ -10,7 +11,9 @@ import { SyncStatusBadge } from "@/components/SyncStatusBadge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-const baseNavItems = [
+type NavItem = { href: string; label: string; icon: string };
+
+const baseNavItems: NavItem[] = [
   { href: "/", label: "Inicio", icon: "🏠" },
   { href: "/clientes", label: "Clientes", icon: "👥" },
   { href: "/levantamientos", label: "Levantamientos", icon: "📋" },
@@ -19,21 +22,48 @@ const baseNavItems = [
   { href: "/catalogo", label: "Catálogo", icon: "📦" },
 ];
 
-const accountNavItem = { href: "/perfil", label: "Mi cuenta", icon: "👤" };
-const adminNavItems = [
+const accountNavItem: NavItem = { href: "/perfil", label: "Mi cuenta", icon: "👤" };
+const adminNavItems: NavItem[] = [
   { href: "/finanzas", label: "Finanzas", icon: "📊" },
   { href: "/colaboradores", label: "Colaboradores", icon: "👷" },
+];
+
+const mobilePrimaryItems: NavItem[] = [
+  { href: "/", label: "Inicio", icon: "🏠" },
+  { href: "/clientes", label: "Clientes", icon: "👥" },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: "💰" },
+  { href: "/hojas-servicio", label: "Servicios", icon: "🔧" },
 ];
 
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { role, loading } = useSession();
+  const [moreOpen, setMoreOpen] = useState(false);
 
-  const items =
-    role === "admin"
-      ? [...baseNavItems, accountNavItem, ...adminNavItems]
-      : [...baseNavItems, accountNavItem];
+  const sidebarItems = useMemo(
+    () =>
+      role === "admin"
+        ? [...baseNavItems, accountNavItem, ...adminNavItems]
+        : [...baseNavItems, accountNavItem],
+    [role],
+  );
+
+  const mobileMoreItems = useMemo(() => {
+    const items: NavItem[] = [
+      { href: "/levantamientos", label: "Levantamientos", icon: "📋" },
+      { href: "/catalogo", label: "Catálogo", icon: "📦" },
+      accountNavItem,
+    ];
+    if (role === "admin") items.push(...adminNavItems);
+    return items;
+  }, [role]);
+
+  const moreIsActive = mobileMoreItems.some((item) => pathname === item.href);
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
     await fetch("/api/auth", {
@@ -44,8 +74,6 @@ export function AppNav() {
     router.push("/login");
     router.refresh();
   }
-
-  const gridCols = items.length <= 6 ? "grid-cols-6" : "grid-cols-4";
 
   return (
     <>
@@ -76,9 +104,48 @@ export function AppNav() {
         </div>
       </header>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-brand-navy-light bg-brand-navy md:hidden">
-        <div className={cn("grid", gridCols)}>
-          {items.map((item) => {
+      {/* Menú móvil: una sola fila + panel "Más" */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-brand-navy-light bg-brand-navy pb-[env(safe-area-inset-bottom)] md:hidden">
+        {moreOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-30 bg-black/40"
+              aria-label="Cerrar menú"
+              onClick={() => setMoreOpen(false)}
+            />
+            <div className="absolute bottom-full left-0 right-0 z-40 max-h-[60vh] overflow-y-auto border-t border-brand-navy-light bg-brand-navy px-2 py-2">
+              {mobileMoreItems.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium",
+                      active ? "bg-brand-gold/15 text-brand-gold" : "text-white/80",
+                    )}
+                    onClick={() => setMoreOpen(false)}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    {item.label}
+                  </Link>
+                );
+              })}
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-white/80"
+                onClick={handleLogout}
+              >
+                <span className="text-lg">🚪</span>
+                Cerrar sesión
+              </button>
+            </div>
+          </>
+        )}
+
+        <div className="grid grid-cols-5">
+          {mobilePrimaryItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
@@ -94,6 +161,17 @@ export function AppNav() {
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMoreOpen((open) => !open)}
+            className={cn(
+              "flex flex-col items-center gap-0.5 px-1 py-2 text-[10px]",
+              moreOpen || moreIsActive ? "text-brand-gold" : "text-white/60",
+            )}
+          >
+            <span className="text-base">⋯</span>
+            <span>Más</span>
+          </button>
         </div>
       </nav>
 
@@ -110,7 +188,7 @@ export function AppNav() {
         </Link>
         <div className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {!loading &&
-            items.map((item) => {
+            sidebarItems.map((item) => {
               const active = pathname === item.href;
               return (
                 <Link
