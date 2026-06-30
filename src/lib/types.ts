@@ -74,6 +74,7 @@ export type PhotovoltaicData = {
 export type SurveyWorkItem = {
   id: string;
   tipoTrabajo: string;
+  tipoTrabajoPersonalizado?: string;
   area: string;
   cantidad: number;
   unidad: WorkUnit | string;
@@ -93,6 +94,13 @@ export type SurveyArea = {
   id: string;
   nombre: string;
   partidas: SurveyWorkItem[];
+};
+
+export type CustomWorkType = {
+  id?: number;
+  nombre: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type Survey = {

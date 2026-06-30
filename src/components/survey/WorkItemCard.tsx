@@ -1,12 +1,13 @@
 "use client";
 
+import { useLiveQuery } from "dexie-react-hooks";
 import type { SurveyWorkItem } from "@/lib/types";
+import { db } from "@/lib/db";
+import { dataStore } from "@/lib/sync";
 import {
-  applyTipoTrabajoDefaults,
+  applyWorkItemPatch,
+  buildTiposTrabajoOptions,
   DIFICULTAD_OPTIONS,
-  generateWorkDescription,
-  TIPOS_TRABAJO,
-  type TipoTrabajo,
   UNIDAD_OPTIONS,
 } from "@/lib/survey-work";
 import { Button } from "@/components/ui/Button";
@@ -29,25 +30,22 @@ export function WorkItemCard({
   onChange: (item: SurveyWorkItem) => void;
   onRemove: () => void;
 }) {
+  const customWorkTypes =
+    useLiveQuery(() => db.customWorkTypes.orderBy("nombre").toArray()) ?? [];
+  const tipoOptions = buildTiposTrabajoOptions(customWorkTypes.map((tipo) => tipo.nombre));
+
   function update(patch: Partial<SurveyWorkItem>) {
-    let next = { ...item, ...patch, area: areaNombre || item.area };
+    onChange(applyWorkItemPatch(item, patch, areaNombre));
+  }
 
-    if (patch.tipoTrabajo) {
-      next = applyTipoTrabajoDefaults(next, patch.tipoTrabajo as TipoTrabajo);
-      next.area = areaNombre || next.area;
-    } else if (!next.descripcionManual) {
-      next.descripcion = generateWorkDescription(next);
-    }
-
-    onChange(next);
+  async function saveCustomWorkType(nombre: string) {
+    const trimmed = nombre.trim();
+    if (trimmed.length < 3) return;
+    await dataStore.customWorkTypes.ensure(trimmed);
   }
 
   function updateFotovoltaico(fotovoltaico: NonNullable<SurveyWorkItem["fotovoltaico"]>) {
-    const next = { ...item, fotovoltaico, area: areaNombre || item.area };
-    if (!next.descripcionManual) {
-      next.descripcion = generateWorkDescription(next);
-    }
-    onChange(next);
+    onChange(applyWorkItemPatch(item, { fotovoltaico }, areaNombre));
   }
 
   return (
@@ -63,8 +61,23 @@ export function WorkItemCard({
         label="Tipo de trabajo *"
         value={item.tipoTrabajo}
         onChange={(e) => update({ tipoTrabajo: e.target.value })}
-        options={TIPOS_TRABAJO.map((t) => ({ value: t, label: t }))}
+        options={tipoOptions.map((tipo) => ({
+          value: tipo,
+          label: tipo === "Otro" ? "Otro (especificar)" : tipo,
+        }))}
       />
+
+      {item.tipoTrabajo === "Otro" && (
+        <Input
+          label="Describe el trabajo *"
+          value={item.tipoTrabajoPersonalizado ?? ""}
+          onChange={(e) =>
+            update({ tipoTrabajoPersonalizado: e.target.value, descripcionManual: false })
+          }
+          onBlur={(e) => void saveCustomWorkType(e.target.value)}
+          placeholder="Ej. Instalación de bomba de agua, revisión de transformador..."
+        />
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Input

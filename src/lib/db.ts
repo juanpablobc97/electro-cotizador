@@ -1,5 +1,13 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Client, ColaboradorWithUser, Material, Quote, ServiceSheet, Survey } from "./types";
+import type {
+  Client,
+  ColaboradorWithUser,
+  CustomWorkType,
+  Material,
+  Quote,
+  ServiceSheet,
+  Survey,
+} from "./types";
 
 const db = new Dexie("ElectroCotizadorDB") as Dexie & {
   clients: EntityTable<Client, "id">;
@@ -8,6 +16,7 @@ const db = new Dexie("ElectroCotizadorDB") as Dexie & {
   quotes: EntityTable<Quote, "id">;
   serviceSheets: EntityTable<ServiceSheet, "id">;
   colaboradoresCache: EntityTable<ColaboradorWithUser, "id">;
+  customWorkTypes: EntityTable<CustomWorkType, "id">;
 };
 
 db.version(1).stores({
@@ -40,6 +49,16 @@ db.version(4).stores({
   quotes: "++id, clientId, surveyId, numero, estado, fecha, createdAt",
   serviceSheets: "++id, clientId, quoteId, numero, fecha, tipoServicio, createdAt",
   colaboradoresCache: "id, nombre, activo",
+});
+
+db.version(5).stores({
+  clients: "++id, nombre, telefono, createdAt",
+  materials: "++id, codigo, nombre, categoria, createdAt",
+  surveys: "++id, clientId, estado, fecha, createdAt",
+  quotes: "++id, clientId, surveyId, numero, estado, fecha, createdAt",
+  serviceSheets: "++id, clientId, quoteId, numero, fecha, tipoServicio, createdAt",
+  colaboradoresCache: "id, nombre, activo",
+  customWorkTypes: "++id, nombre, createdAt",
 });
 
 export async function seedDefaultMaterials() {

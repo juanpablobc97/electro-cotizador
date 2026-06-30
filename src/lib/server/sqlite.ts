@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
-import type { Client, Material, Quote, ServiceSheet, Survey } from "../types";
+import type { Client, CustomWorkType, Material, Quote, ServiceSheet, Survey } from "../types";
 
 const DB_DIR = process.env.DATABASE_DIR
   ? path.resolve(process.env.DATABASE_DIR)
@@ -99,6 +99,13 @@ export function getDb(): Database.Database {
       updatedAt TEXT NOT NULL,
       FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
       FOREIGN KEY (quoteId) REFERENCES quotes(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_work_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
     );
   `);
 
@@ -206,6 +213,15 @@ export function getMaterialById(id: number): Material | null {
   return row ? rowToMaterial(row) : null;
 }
 
+function rowToCustomWorkType(row: Record<string, unknown>): CustomWorkType {
+  return {
+    id: row.id as number,
+    nombre: row.nombre as string,
+    createdAt: parseDate(row.createdAt as string),
+    updatedAt: parseDate(row.updatedAt as string),
+  };
+}
+
 function rowToSurvey(row: Record<string, unknown>): Survey {
   return {
     id: row.id as number,
@@ -280,6 +296,7 @@ export type SyncPayload = {
   surveys: Survey[];
   quotes: Quote[];
   serviceSheets: ServiceSheet[];
+  customWorkTypes: CustomWorkType[];
   syncedAt: string;
 };
 
@@ -295,6 +312,10 @@ export function getFullSyncPayload(): SyncPayload {
       .prepare("SELECT * FROM service_sheets ORDER BY fecha DESC")
       .all() as Record<string, unknown>[])
       .map(rowToServiceSheet),
+    customWorkTypes: (db
+      .prepare("SELECT * FROM custom_work_types ORDER BY nombre COLLATE NOCASE")
+      .all() as Record<string, unknown>[])
+      .map(rowToCustomWorkType),
     syncedAt: new Date().toISOString(),
   };
 }
@@ -521,9 +542,12 @@ export type UpsertAction =
   | { table: "materials"; record: Material }
   | { table: "surveys"; record: Survey }
   | { table: "quotes"; record: Quote }
-  | { table: "serviceSheets"; record: ServiceSheet };
+  | { table: "serviceSheets"; record: ServiceSheet }
+  | { table: "custom_work_types"; record: CustomWorkType };
 
-export function upsertRecord(action: UpsertAction): Client | Material | Survey | Quote | ServiceSheet {
+export function upsertRecord(
+  action: UpsertAction,
+): Client | Material | Survey | Quote | ServiceSheet | CustomWorkType {
   const db = getDb();
 
   if (action.table === "clients") {
@@ -765,10 +789,74 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
     );
   }
 
-  const r = action.record;
-  if (r.id) {
-    const params = {
-      id: r.id,
+  if (action.table === "serviceSheets") {
+    const r = action.record;
+    if (r.id) {
+      const params = {
+        id: r.id,
+        clientId: r.clientId,
+        quoteId: r.quoteId ?? null,
+        numero: r.numero,
+        fecha: toIso(r.fecha),
+        tipoServicio: r.tipoServicio,
+        direccionServicio: r.direccionServicio,
+        descripcionTrabajo: r.descripcionTrabajo,
+        materiales: JSON.stringify(r.materiales ?? []),
+        garantiaMeses: r.garantiaMeses,
+        notas: r.notas ?? null,
+        fotos: JSON.stringify(r.fotos ?? []),
+        tecnico: r.tecnico ?? null,
+        createdAt: toIso(r.createdAt),
+        updatedAt: toIso(r.updatedAt),
+      };
+      updateOrInsertById(
+        () =>
+          db.prepare(`
+            UPDATE service_sheets SET clientId=@clientId, quoteId=@quoteId, numero=@numero, fecha=@fecha,
+            tipoServicio=@tipoServicio, direccionServicio=@direccionServicio, descripcionTrabajo=@descripcionTrabajo,
+            materiales=@materiales, garantiaMeses=@garantiaMeses, notas=@notas, fotos=@fotos, tecnico=@tecnico,
+            updatedAt=@updatedAt WHERE id=@id
+          `).run({
+            id: r.id,
+            clientId: r.clientId,
+            quoteId: r.quoteId ?? null,
+            numero: r.numero,
+            fecha: toIso(r.fecha),
+            tipoServicio: r.tipoServicio,
+            direccionServicio: r.direccionServicio,
+            descripcionTrabajo: r.descripcionTrabajo,
+            materiales: JSON.stringify(r.materiales ?? []),
+            garantiaMeses: r.garantiaMeses,
+            notas: r.notas ?? null,
+            fotos: JSON.stringify(r.fotos ?? []),
+            tecnico: r.tecnico ?? null,
+            updatedAt: toIso(r.updatedAt),
+          }),
+        () =>
+          db.prepare(`
+            INSERT INTO service_sheets (
+              id, clientId, quoteId, numero, fecha, tipoServicio, direccionServicio, descripcionTrabajo,
+              materiales, garantiaMeses, notas, fotos, tecnico, createdAt, updatedAt
+            ) VALUES (
+              @id, @clientId, @quoteId, @numero, @fecha, @tipoServicio, @direccionServicio, @descripcionTrabajo,
+              @materiales, @garantiaMeses, @notas, @fotos, @tecnico, @createdAt, @updatedAt
+            )
+          `).run(params),
+      );
+      return rowToServiceSheet(
+        db.prepare("SELECT * FROM service_sheets WHERE id = ?").get(r.id) as Record<string, unknown>,
+      );
+    }
+
+    const result = db.prepare(`
+      INSERT INTO service_sheets (
+        clientId, quoteId, numero, fecha, tipoServicio, direccionServicio, descripcionTrabajo,
+        materiales, garantiaMeses, notas, fotos, tecnico, createdAt, updatedAt
+      ) VALUES (
+        @clientId, @quoteId, @numero, @fecha, @tipoServicio, @direccionServicio, @descripcionTrabajo,
+        @materiales, @garantiaMeses, @notas, @fotos, @tecnico, @createdAt, @updatedAt
+      )
+    `).run({
       clientId: r.clientId,
       quoteId: r.quoteId ?? null,
       numero: r.numero,
@@ -783,73 +871,72 @@ export function upsertRecord(action: UpsertAction): Client | Material | Survey |
       tecnico: r.tecnico ?? null,
       createdAt: toIso(r.createdAt),
       updatedAt: toIso(r.updatedAt),
-    };
-    updateOrInsertById(
-      () =>
-        db.prepare(`
-          UPDATE service_sheets SET clientId=@clientId, quoteId=@quoteId, numero=@numero, fecha=@fecha,
-          tipoServicio=@tipoServicio, direccionServicio=@direccionServicio, descripcionTrabajo=@descripcionTrabajo,
-          materiales=@materiales, garantiaMeses=@garantiaMeses, notas=@notas, fotos=@fotos, tecnico=@tecnico,
-          updatedAt=@updatedAt WHERE id=@id
-        `).run({
-          id: r.id,
-          clientId: r.clientId,
-          quoteId: r.quoteId ?? null,
-          numero: r.numero,
-          fecha: toIso(r.fecha),
-          tipoServicio: r.tipoServicio,
-          direccionServicio: r.direccionServicio,
-          descripcionTrabajo: r.descripcionTrabajo,
-          materiales: JSON.stringify(r.materiales ?? []),
-          garantiaMeses: r.garantiaMeses,
-          notas: r.notas ?? null,
-          fotos: JSON.stringify(r.fotos ?? []),
-          tecnico: r.tecnico ?? null,
-          updatedAt: toIso(r.updatedAt),
-        }),
-      () =>
-        db.prepare(`
-          INSERT INTO service_sheets (
-            id, clientId, quoteId, numero, fecha, tipoServicio, direccionServicio, descripcionTrabajo,
-            materiales, garantiaMeses, notas, fotos, tecnico, createdAt, updatedAt
-          ) VALUES (
-            @id, @clientId, @quoteId, @numero, @fecha, @tipoServicio, @direccionServicio, @descripcionTrabajo,
-            @materiales, @garantiaMeses, @notas, @fotos, @tecnico, @createdAt, @updatedAt
-          )
-        `).run(params),
-    );
+    });
     return rowToServiceSheet(
-      db.prepare("SELECT * FROM service_sheets WHERE id = ?").get(r.id) as Record<string, unknown>,
+      db.prepare("SELECT * FROM service_sheets WHERE id = ?").get(result.lastInsertRowid) as Record<
+        string,
+        unknown
+      >,
     );
   }
 
-  const result = db.prepare(`
-    INSERT INTO service_sheets (
-      clientId, quoteId, numero, fecha, tipoServicio, direccionServicio, descripcionTrabajo,
-      materiales, garantiaMeses, notas, fotos, tecnico, createdAt, updatedAt
-    ) VALUES (
-      @clientId, @quoteId, @numero, @fecha, @tipoServicio, @direccionServicio, @descripcionTrabajo,
-      @materiales, @garantiaMeses, @notas, @fotos, @tecnico, @createdAt, @updatedAt
-    )
-  `).run({
-    clientId: r.clientId,
-    quoteId: r.quoteId ?? null,
-    numero: r.numero,
-    fecha: toIso(r.fecha),
-    tipoServicio: r.tipoServicio,
-    direccionServicio: r.direccionServicio,
-    descripcionTrabajo: r.descripcionTrabajo,
-    materiales: JSON.stringify(r.materiales ?? []),
-    garantiaMeses: r.garantiaMeses,
-    notas: r.notas ?? null,
-    fotos: JSON.stringify(r.fotos ?? []),
-    tecnico: r.tecnico ?? null,
-    createdAt: toIso(r.createdAt),
-    updatedAt: toIso(r.updatedAt),
-  });
-  return rowToServiceSheet(
-    db.prepare("SELECT * FROM service_sheets WHERE id = ?").get(result.lastInsertRowid) as Record<string, unknown>,
-  );
+  if (action.table === "custom_work_types") {
+    const r = action.record;
+    const nombre = r.nombre.trim();
+    if (!nombre) throw new Error("El nombre del trabajo es requerido");
+
+    const existingByName = db
+      .prepare("SELECT * FROM custom_work_types WHERE nombre = ? COLLATE NOCASE")
+      .get(nombre) as Record<string, unknown> | undefined;
+
+    if (r.id) {
+      const params = {
+        id: r.id,
+        nombre,
+        createdAt: toIso(r.createdAt),
+        updatedAt: toIso(r.updatedAt),
+      };
+      updateOrInsertById(
+        () =>
+          db.prepare(`
+            UPDATE custom_work_types SET nombre=@nombre, updatedAt=@updatedAt WHERE id=@id
+          `).run({ id: r.id, nombre, updatedAt: toIso(r.updatedAt) }),
+        () =>
+          db.prepare(`
+            INSERT INTO custom_work_types (id, nombre, createdAt, updatedAt)
+            VALUES (@id, @nombre, @createdAt, @updatedAt)
+          `).run(params),
+      );
+      return rowToCustomWorkType(
+        db.prepare("SELECT * FROM custom_work_types WHERE id = ?").get(r.id) as Record<string, unknown>,
+      );
+    }
+
+    if (existingByName) {
+      db.prepare("UPDATE custom_work_types SET updatedAt = ? WHERE id = ?").run(
+        toIso(r.updatedAt),
+        existingByName.id,
+      );
+      return rowToCustomWorkType(existingByName);
+    }
+
+    const result = db.prepare(`
+      INSERT INTO custom_work_types (nombre, createdAt, updatedAt)
+      VALUES (@nombre, @createdAt, @updatedAt)
+    `).run({
+      nombre,
+      createdAt: toIso(r.createdAt),
+      updatedAt: toIso(r.updatedAt),
+    });
+    return rowToCustomWorkType(
+      db.prepare("SELECT * FROM custom_work_types WHERE id = ?").get(result.lastInsertRowid) as Record<
+        string,
+        unknown
+      >,
+    );
+  }
+
+  throw new Error(`Tabla no soportada: ${(action as UpsertAction).table}`);
 }
 
 export type DeleteAction =

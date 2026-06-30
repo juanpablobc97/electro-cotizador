@@ -1,4 +1,5 @@
 import type { Material, QuoteLaborItem, QuoteMaterialItem, Survey, SurveyWorkItem } from "./types";
+import { resolveTipoTrabajo } from "./survey-work";
 
 const DEFAULT_TARIFA_UNIDAD = 100;
 
@@ -25,11 +26,11 @@ const TARIFA_POR_TIPO: Record<string, number> = {
 };
 
 function defaultTarifaUnidad(partida: SurveyWorkItem): number {
-  return TARIFA_POR_TIPO[partida.tipoTrabajo] ?? DEFAULT_TARIFA_UNIDAD;
+  return TARIFA_POR_TIPO[resolveTipoTrabajo(partida)] ?? DEFAULT_TARIFA_UNIDAD;
 }
 
 function laborDescription(partida: SurveyWorkItem): string {
-  const main = partida.descripcion?.trim() || partida.tipoTrabajo;
+  const main = partida.descripcion?.trim() || resolveTipoTrabajo(partida);
   const area = partida.area ? ` — ${partida.area}` : "";
   return `${main}${area}`;
 }

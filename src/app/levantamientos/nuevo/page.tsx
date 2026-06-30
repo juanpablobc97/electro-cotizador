@@ -7,7 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import type { GeneralPhotos, SurveyArea } from "@/lib/types";
-import { createEmptyArea, flattenAreasToPartidas } from "@/lib/survey-work";
+import { createEmptyArea, flattenAreasToPartidas, registerCustomWorkTypesFromPartidas } from "@/lib/survey-work";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -75,6 +75,9 @@ function NuevoLevantamientoForm() {
     const form = new FormData(e.currentTarget);
     const now = new Date();
     const partidas = flattenAreasToPartidas(areas);
+    await registerCustomWorkTypesFromPartidas(partidas, (nombre) =>
+      dataStore.customWorkTypes.ensure(nombre),
+    );
 
     const id = await dataStore.surveys.create({
       clientId: Number(form.get("clientId")),

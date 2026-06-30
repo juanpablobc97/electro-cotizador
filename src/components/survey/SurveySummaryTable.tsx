@@ -1,5 +1,5 @@
 import type { SurveyWorkItem } from "@/lib/types";
-import { DIFICULTAD_OPTIONS } from "@/lib/survey-work";
+import { DIFICULTAD_OPTIONS, resolveTipoTrabajo } from "@/lib/survey-work";
 
 function dificultadLabel(value: SurveyWorkItem["dificultad"]) {
   return DIFICULTAD_OPTIONS.find((d) => d.value === value)?.label ?? value;
@@ -33,7 +33,7 @@ export function SurveySummaryTable({ partidas }: { partidas: SurveyWorkItem[] })
             <tr key={p.id}>
               <td className="px-3 py-2 whitespace-nowrap">{p.area || "—"}</td>
               <td className="px-3 py-2 whitespace-nowrap">{i + 1}</td>
-              <td className="px-3 py-2 min-w-[12rem]">{p.descripcion || p.tipoTrabajo}</td>
+              <td className="px-3 py-2 min-w-[12rem]">{p.descripcion || resolveTipoTrabajo(p)}</td>
               <td className="px-3 py-2 whitespace-nowrap">{p.unidad}</td>
               <td className="px-3 py-2 whitespace-nowrap">{p.cantidad}</td>
               <td className="px-3 py-2 whitespace-nowrap">{dificultadLabel(p.dificultad)}</td>

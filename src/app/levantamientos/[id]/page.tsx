@@ -6,7 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { dataStore } from "@/lib/sync";
 import { formatDate } from "@/lib/utils";
-import { GENERAL_PHOTO_CATEGORIES, DIFICULTAD_OPTIONS, getSurveyAreas } from "@/lib/survey-work";
+import { GENERAL_PHOTO_CATEGORIES, DIFICULTAD_OPTIONS, getSurveyAreas, resolveTipoTrabajo } from "@/lib/survey-work";
 import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -97,7 +97,7 @@ export default function LevantamientoDetallePage() {
                 {area.partidas.map((p, i) => (
                   <div key={p.id} className="rounded-lg border border-slate-200 p-3 text-sm">
                     <p className="font-medium text-slate-900">
-                      {i + 1}. {p.tipoTrabajo}
+                      {i + 1}. {resolveTipoTrabajo(p)}
                     </p>
                     <p className="mt-1 text-slate-600">{p.descripcion}</p>
                     <p className="mt-1 text-slate-500">

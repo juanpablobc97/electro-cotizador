@@ -25,6 +25,34 @@ export const TIPOS_TRABAJO = [
 
 export type TipoTrabajo = (typeof TIPOS_TRABAJO)[number];
 
+export function resolveTipoTrabajo(
+  item: Pick<SurveyWorkItem, "tipoTrabajo" | "tipoTrabajoPersonalizado">,
+): string {
+  if (item.tipoTrabajo === "Otro") {
+    return item.tipoTrabajoPersonalizado?.trim() || "Otro";
+  }
+  return item.tipoTrabajo;
+}
+
+export function buildTiposTrabajoOptions(customTypes: string[]): string[] {
+  const standard = TIPOS_TRABAJO.filter((tipo) => tipo !== "Otro");
+  const custom = customTypes
+    .map((nombre) => nombre.trim())
+    .filter(
+      (nombre) =>
+        nombre.length > 0 &&
+        nombre.toLowerCase() !== "otro" &&
+        !isStandardTipoTrabajo(nombre),
+    )
+    .sort((a, b) => a.localeCompare(b, "es"));
+
+  return [...standard, ...custom, "Otro"];
+}
+
+export function isStandardTipoTrabajo(value: string): value is TipoTrabajo {
+  return (TIPOS_TRABAJO as readonly string[]).includes(value);
+}
+
 export const GENERAL_PHOTO_CATEGORIES = [
   { key: "fachada", label: "Fachada" },
   { key: "acometida", label: "Acometida" },
@@ -110,6 +138,12 @@ export function applyTipoTrabajoDefaults(
     next.fotovoltaico = undefined;
   }
 
+  if (tipoTrabajo === "Otro") {
+    next.tipoTrabajoPersonalizado = item.tipoTrabajoPersonalizado ?? "";
+  } else {
+    next.tipoTrabajoPersonalizado = undefined;
+  }
+
   if (!next.descripcionManual) {
     next.descripcion = generateWorkDescription(next);
   }
@@ -117,8 +151,55 @@ export function applyTipoTrabajoDefaults(
   return next;
 }
 
+export function applyWorkItemPatch(
+  item: SurveyWorkItem,
+  patch: Partial<SurveyWorkItem>,
+  areaNombre = "",
+): SurveyWorkItem {
+  let next = { ...item, ...patch, area: areaNombre || item.area };
+
+  if (patch.tipoTrabajo) {
+    if (isStandardTipoTrabajo(patch.tipoTrabajo)) {
+      next = applyTipoTrabajoDefaults(next, patch.tipoTrabajo);
+    } else {
+      next.tipoTrabajo = patch.tipoTrabajo;
+      next.tipoTrabajoPersonalizado = undefined;
+      next.fotovoltaico = undefined;
+      if (!next.descripcionManual) {
+        next.descripcion = generateWorkDescription(next);
+      }
+    }
+    next.area = areaNombre || next.area;
+    return next;
+  }
+
+  if (patch.tipoTrabajoPersonalizado !== undefined && next.tipoTrabajo === "Otro") {
+    if (!next.descripcionManual) {
+      next.descripcion = generateWorkDescription(next);
+    }
+  } else if (!next.descripcionManual) {
+    next.descripcion = generateWorkDescription(next);
+  }
+
+  return next;
+}
+
+export async function registerCustomWorkTypesFromPartidas(
+  partidas: SurveyWorkItem[],
+  ensure: (nombre: string) => Promise<unknown>,
+) {
+  const seen = new Set<string>();
+  for (const partida of partidas) {
+    if (partida.tipoTrabajo !== "Otro") continue;
+    const nombre = partida.tipoTrabajoPersonalizado?.trim();
+    if (!nombre || seen.has(nombre.toLowerCase())) continue;
+    seen.add(nombre.toLowerCase());
+    await ensure(nombre);
+  }
+}
+
 export function generateWorkDescription(item: SurveyWorkItem): string {
-  const parts = [item.tipoTrabajo];
+  const parts = [resolveTipoTrabajo(item)];
   if (item.area) parts.push(`en ${item.area}`);
   if (item.cantidad && item.unidad) {
     parts.push(`— ${item.cantidad} ${item.unidad}`);

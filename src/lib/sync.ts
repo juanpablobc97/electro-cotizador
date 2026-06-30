@@ -5,7 +5,7 @@ import {
   mergeColaboradorBackups,
   saveColaboradoresLocalBackup,
 } from "@/lib/colaboradores-backup";
-import type { Client, ColaboradorWithUser, Material, Quote, ServiceSheet, Survey } from "@/lib/types";
+import type { Client, ColaboradorWithUser, CustomWorkType, Material, Quote, ServiceSheet, Survey } from "@/lib/types";
 
 export type SyncPayload = {
   clients: Client[];
@@ -13,6 +13,7 @@ export type SyncPayload = {
   surveys: Survey[];
   quotes: Quote[];
   serviceSheets: ServiceSheet[];
+  customWorkTypes: CustomWorkType[];
   colaboradores?: ColaboradorWithUser[];
   syncedAt: string;
 };
@@ -42,13 +43,14 @@ type SyncStore = {
 async function mergeServerIntoDexie(data: SyncPayload) {
   await db.transaction(
     "rw",
-    [db.clients, db.materials, db.surveys, db.quotes, db.serviceSheets],
+    [db.clients, db.materials, db.surveys, db.quotes, db.serviceSheets, db.customWorkTypes],
     async () => {
       await mergeTable(db.clients as unknown as SyncStore, data.clients);
       await mergeTable(db.materials as unknown as SyncStore, data.materials);
       await mergeTable(db.surveys as unknown as SyncStore, data.surveys);
       await mergeTable(db.quotes as unknown as SyncStore, data.quotes);
       await mergeTable(db.serviceSheets as unknown as SyncStore, data.serviceSheets);
+      await mergeTable(db.customWorkTypes as unknown as SyncStore, data.customWorkTypes ?? []);
     },
   );
 }
@@ -165,6 +167,9 @@ function normalizePayload(payload: SyncPayload): SyncPayload {
     quotes: payload.quotes.map((q) => reviveDates(q, ["fecha", "createdAt", "updatedAt"])),
     serviceSheets: payload.serviceSheets.map((s) =>
       reviveDates(s, ["fecha", "createdAt", "updatedAt"]),
+    ),
+    customWorkTypes: (payload.customWorkTypes ?? []).map((t) =>
+      reviveDates(t, ["createdAt", "updatedAt"]),
     ),
     colaboradores: payload.colaboradores?.map(normalizeColaborador),
     syncedAt: payload.syncedAt,
@@ -381,6 +386,26 @@ export const dataStore = {
     async delete(id: number) {
       await postJson({ action: "delete", table: "serviceSheets", id });
       await pullFromServer().catch(() => undefined);
+    },
+  },
+  customWorkTypes: {
+    async ensure(nombre: string) {
+      const trimmed = nombre.trim();
+      if (!trimmed || trimmed.toLowerCase() === "otro") return null;
+
+      const existing = await db.customWorkTypes
+        .filter((item) => item.nombre.toLowerCase() === trimmed.toLowerCase())
+        .first();
+      if (existing) return existing;
+
+      const now = new Date();
+      const { record } = await postJson({
+        action: "upsert",
+        table: "custom_work_types",
+        record: { nombre: trimmed, createdAt: now, updatedAt: now },
+      });
+      await db.customWorkTypes.put(record);
+      return record as CustomWorkType;
     },
   },
 };
