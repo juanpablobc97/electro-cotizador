@@ -279,3 +279,40 @@ export type FinanceSummary = {
   egresos: number;
   balance: number;
 };
+
+export type ObraEtapa =
+  | "levantamiento"
+  | "cotizada"
+  | "aceptada"
+  | "en_obra"
+  | "cobrada"
+  | "rechazada";
+
+export type ObraItem = {
+  id: string;
+  etapa: ObraEtapa;
+  clientId: number;
+  clientNombre: string;
+  titulo: string;
+  surveyId?: number;
+  quoteId?: number;
+  serviceSheetId?: number;
+  quoteNumero?: string;
+  quoteTotal?: number;
+  cobrado: number;
+  saldo: number;
+  fecha: string;
+  direccion?: string;
+};
+
+export type ObrasSummary = {
+  totalPorCobrar: number;
+  obrasActivas: number;
+  porEtapa: Record<ObraEtapa, number>;
+};
+
+export type ObrasDashboard = {
+  obras: ObraItem[];
+  receivables: ObraItem[];
+  summary: ObrasSummary;
+};

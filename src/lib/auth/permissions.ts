@@ -39,7 +39,7 @@ export function getPermissions(role: UserRole): AppPermissions {
   return getPermissionsForUser({ role, canEditCatalogPrices: role === "admin" });
 }
 
-export const ADMIN_ONLY_PATHS = ["/colaboradores", "/usuarios", "/inventario", "/finanzas"];
+export const ADMIN_ONLY_PATHS = ["/colaboradores", "/usuarios", "/inventario", "/finanzas", "/obras"];
 
 export function isAdminOnlyPath(pathname: string): boolean {
   return ADMIN_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

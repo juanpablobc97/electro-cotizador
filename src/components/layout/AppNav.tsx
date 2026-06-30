@@ -24,6 +24,7 @@ const baseNavItems: NavItem[] = [
 
 const accountNavItem: NavItem = { href: "/perfil", label: "Mi cuenta", icon: "👤" };
 const adminNavItems: NavItem[] = [
+  { href: "/obras", label: "Obras", icon: "🏗️" },
   { href: "/finanzas", label: "Finanzas", icon: "📊" },
   { href: "/colaboradores", label: "Colaboradores", icon: "👷" },
 ];
