@@ -155,13 +155,20 @@ export async function generateQuotePdfBlob(
   }
 
   let startY = clientY + 4;
+  const tableMargin = getPdfTableMargin();
+  const tableStyles = {
+    fontSize: 9,
+    cellPadding: 2,
+    overflow: "linebreak" as const,
+  };
+  const tableHeadStyles = { fillColor: NAVY_RGB, textColor: [255, 255, 255] as [number, number, number] };
 
   if (quote.materiales.length > 0) {
-    doc.setFontSize(11);
-    doc.setTextColor(...NAVY_RGB);
-    doc.text("Materiales", margin, startY);
+    const materialsStart = drawSectionTitle(doc, startY, "Materiales");
     autoTable(doc, {
-      startY: startY + 4,
+      startY: materialsStart,
+      margin: tableMargin,
+      showHead: "everyPage",
       head: [["Descripción", "Unidad", "Cant.", "P.U.", "Importe"]],
       body: quote.materiales.map((item) => [
         item.descripcion,
@@ -170,18 +177,25 @@ export async function generateQuotePdfBlob(
         formatCurrency(item.precioUnitario),
         formatCurrency(item.cantidad * item.precioUnitario),
       ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: NAVY_RGB, textColor: [255, 255, 255] },
+      styles: tableStyles,
+      headStyles: tableHeadStyles,
+      columnStyles: {
+        0: { cellWidth: 78 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 16, halign: "right" },
+        3: { cellWidth: 28, halign: "right" },
+        4: { cellWidth: 28, halign: "right" },
+      },
     });
-    startY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    startY = getLastAutoTableY(doc) + 8;
   }
 
   if (quote.manoObra.length > 0) {
-    doc.setFontSize(11);
-    doc.setTextColor(...NAVY_RGB);
-    doc.text("Mano de obra", margin, startY);
+    const laborStart = drawSectionTitle(doc, startY, "Mano de obra");
     autoTable(doc, {
-      startY: startY + 4,
+      startY: laborStart,
+      margin: tableMargin,
+      showHead: "everyPage",
       head: [["Descripción", "Unidad", "Cant.", "Tarifa", "Importe"]],
       body: quote.manoObra.map((item) => {
         const labor = normalizeLaborItem(item);
@@ -193,12 +207,20 @@ export async function generateQuotePdfBlob(
           formatCurrency(laborImporte(item)),
         ];
       }),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: NAVY_RGB, textColor: [255, 255, 255] },
+      styles: tableStyles,
+      headStyles: tableHeadStyles,
+      columnStyles: {
+        0: { cellWidth: 78 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 16, halign: "right" },
+        3: { cellWidth: 28, halign: "right" },
+        4: { cellWidth: 28, halign: "right" },
+      },
     });
-    startY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    startY = getLastAutoTableY(doc) + 8;
   }
 
+  startY = ensurePdfSpace(doc, startY, 50);
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   doc.text(`Subtotal materiales: ${formatCurrency(totals.subtotalMateriales)}`, margin, startY);
@@ -210,14 +232,15 @@ export async function generateQuotePdfBlob(
   doc.text(`TOTAL: ${formatCurrency(totals.total)}`, margin, startY + 28);
 
   if (quote.notas) {
+    startY = ensurePdfSpace(doc, startY + 38, 20);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
-    doc.text("Notas:", margin, startY + 40);
+    doc.text("Notas:", margin, startY);
     const splitNotes = doc.splitTextToSize(quote.notas, 180);
-    doc.text(splitNotes, margin, startY + 46);
+    doc.text(splitNotes, margin, startY + 6);
   }
 
-  drawPdfFooter(doc);
+  finalizePdfPages(doc);
   return { blob: doc.output("blob"), filename: `${quote.numero}.pdf` };
 }
 
@@ -229,6 +252,42 @@ export async function exportQuotePdf(
   const { downloadPdf } = await import("./share-pdf");
   const { blob, filename } = await generateQuotePdfBlob(quote, client, survey);
   downloadPdf(blob, filename);
+}
+
+function getPdfTableMargin() {
+  return {
+    left: PDF_MARGIN,
+    right: PDF_MARGIN,
+    bottom: PDF_FOOTER_HEIGHT + PDF_FOOTER_GAP,
+  };
+}
+
+function getLastAutoTableY(doc: import("jspdf").jsPDF): number {
+  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+}
+
+function finalizePdfPages(doc: import("jspdf").jsPDF) {
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    drawPdfFooter(doc);
+    doc.setFontSize(7);
+    doc.setTextColor(200, 200, 200);
+    doc.text(
+      `Página ${page} de ${pageCount}`,
+      PDF_RIGHT_EDGE,
+      doc.internal.pageSize.height - PDF_FOOTER_HEIGHT - 2,
+      { align: "right" },
+    );
+  }
+}
+
+function drawSectionTitle(doc: import("jspdf").jsPDF, y: number, title: string): number {
+  const nextY = ensurePdfSpace(doc, y, 12);
+  doc.setFontSize(11);
+  doc.setTextColor(...NAVY_RGB);
+  doc.text(title, PDF_MARGIN, nextY);
+  return nextY + 4;
 }
 
 function drawPdfFooter(doc: import("jspdf").jsPDF) {
@@ -292,21 +351,26 @@ export async function generateServiceSheetPdfBlob(
   y += doc.splitTextToSize(sheet.descripcionTrabajo, 180).length * 5 + 6;
 
   if (sheet.materiales.length > 0) {
-    doc.setFontSize(11);
-    doc.setTextColor(...NAVY_RGB);
-    doc.text("Materiales utilizados", margin, y);
+    const materialsStart = drawSectionTitle(doc, y, "Materiales utilizados");
     autoTable(doc, {
-      startY: y + 4,
+      startY: materialsStart,
+      margin: getPdfTableMargin(),
+      showHead: "everyPage",
       head: [["Descripción", "Unidad", "Cantidad"]],
       body: sheet.materiales.map((item) => [
         item.descripcion,
         item.unidad,
         item.cantidad.toString(),
       ]),
-      styles: { fontSize: 9 },
+      styles: { fontSize: 9, cellPadding: 2, overflow: "linebreak" as const },
       headStyles: { fillColor: NAVY_RGB, textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { cellWidth: 110 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 30, halign: "right" },
+      },
     });
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    y = getLastAutoTableY(doc) + 8;
   }
 
   doc.setFillColor(254, 249, 231);
@@ -351,7 +415,7 @@ export async function generateServiceSheetPdfBlob(
     y,
   );
 
-  drawPdfFooter(doc);
+  finalizePdfPages(doc);
   return { blob: doc.output("blob"), filename: `${sheet.numero}.pdf` };
 }
 
