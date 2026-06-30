@@ -25,9 +25,11 @@ git push -u origin main
 
 Sin esto, los datos se pierden en cada deploy.
 
-1. En tu servicio, pestaña **Volumes**.
-2. **Add Volume** → Mount Path: `/data`
-3. Asocia el volumen al servicio de la app.
+1. En el **lienzo del proyecto** (vista con las cajas del servicio), crea el volumen:
+   - `Cmd+K` (Mac) o `Ctrl+K` (Windows) → busca **New Volume**, o
+   - clic derecho en espacio vacío del lienzo → **New Volume**
+2. Conecta el volumen al servicio de la app.
+3. **Mount Path:** `/data`
 
 ## Paso 4 — Variables de entorno
 
@@ -38,8 +40,11 @@ AUTH_SECRET=genera-una-cadena-aleatoria-de-al-menos-32-caracteres
 AUTH_USERNAME=tu_usuario
 AUTH_PASSWORD=tu_contraseña_segura
 DATABASE_DIR=/data
+RAILWAY_RUN_UID=0
 NODE_ENV=production
 ```
+
+`RAILWAY_RUN_UID=0` evita que el deploy falle al escribir en el volumen (permisos en `/data`).
 
 Para generar AUTH_SECRET en Mac:
 ```bash
