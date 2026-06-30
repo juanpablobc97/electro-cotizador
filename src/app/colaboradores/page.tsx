@@ -506,7 +506,7 @@ export default function ColaboradoresPage() {
             Si lo autorizas, ciertos colaboradores pueden <strong>actualizar precios</strong> del
             catálogo (sin agregar ni eliminar materiales).
           </li>
-          <li>Sin acceso a este apartado de colaboradores ni al inventario de herramienta (próximamente).</li>
+          <li>Sin acceso a este apartado de colaboradores ni al inventario de herramienta y vehículos.</li>
         </ul>
       </Card>
     </div>

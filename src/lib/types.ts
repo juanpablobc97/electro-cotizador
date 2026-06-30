@@ -316,3 +316,83 @@ export type ObrasDashboard = {
   receivables: ObraItem[];
   summary: ObrasSummary;
 };
+
+export type InventoryItemType = "herramienta" | "vehiculo";
+
+export type InventoryItemStatus = "activo" | "en_reparacion" | "baja";
+
+export type InventoryEventType =
+  | "asignacion"
+  | "devolucion"
+  | "servicio"
+  | "reparacion"
+  | "km"
+  | "nota";
+
+export type InventoryItem = {
+  id?: number;
+  tipo: InventoryItemType;
+  nombre: string;
+  descripcion?: string;
+  marca?: string;
+  modelo?: string;
+  numeroSerie?: string;
+  placa?: string;
+  kmActual?: number;
+  colaboradorId?: number;
+  fechaAdquisicion?: Date;
+  costo?: number;
+  estado: InventoryItemStatus;
+  proximoServicioKm?: number;
+  proximoServicioFecha?: Date;
+  notas?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type InventoryItemInput = {
+  tipo: InventoryItemType;
+  nombre: string;
+  descripcion?: string;
+  marca?: string;
+  modelo?: string;
+  numeroSerie?: string;
+  placa?: string;
+  kmActual?: number;
+  colaboradorId?: number;
+  fechaAdquisicion?: string;
+  costo?: number;
+  estado?: InventoryItemStatus;
+  proximoServicioKm?: number;
+  proximoServicioFecha?: string;
+  notas?: string;
+};
+
+export type InventoryEvent = {
+  id?: number;
+  itemId: number;
+  tipo: InventoryEventType;
+  fecha: Date;
+  colaboradorId?: number;
+  km?: number;
+  costo?: number;
+  descripcion: string;
+  notas?: string;
+  createdAt: Date;
+};
+
+export type InventoryItemWithRefs = InventoryItem & {
+  colaboradorNombre?: string;
+};
+
+export type InventoryEventWithRefs = InventoryEvent & {
+  colaboradorNombre?: string;
+  itemNombre?: string;
+};
+
+export type InventorySummary = {
+  herramientas: number;
+  vehiculos: number;
+  asignadas: number;
+  enReparacion: number;
+};
