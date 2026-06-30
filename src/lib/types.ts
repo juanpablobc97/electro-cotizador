@@ -311,10 +311,42 @@ export type ObrasSummary = {
   porEtapa: Record<ObraEtapa, number>;
 };
 
+export type ObraMovementBreakdown = {
+  egresosMaterial: number;
+  egresosGastoObra: number;
+  egresosColaborador: number;
+  egresosOtros: number;
+  totalEgresos: number;
+};
+
+export type ObraProfitability = ObraItem & {
+  presupuestado: number;
+  gastado: number;
+  breakdown: ObraMovementBreakdown;
+  utilidad: number;
+  margenPct: number | null;
+};
+
+export type ObrasReportSummary = {
+  totalPresupuestado: number;
+  totalCobrado: number;
+  totalGastado: number;
+  utilidadGlobal: number;
+  obrasConGastos: number;
+  egresosSinObra: number;
+  montoEgresosSinObra: number;
+};
+
+export type ObrasReport = {
+  obras: ObraProfitability[];
+  summary: ObrasReportSummary;
+};
+
 export type ObrasDashboard = {
   obras: ObraItem[];
   receivables: ObraItem[];
   summary: ObrasSummary;
+  report: ObrasReport;
 };
 
 export type InventoryItemType = "herramienta" | "vehiculo";

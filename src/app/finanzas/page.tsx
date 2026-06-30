@@ -10,6 +10,7 @@ import {
   COLLABORATOR_PAYMENT_LABELS,
   defaultCategoryForTipo,
   PAYMENT_METHOD_LABELS,
+  suggestsQuoteLink,
   TIPO_LABELS,
 } from "@/lib/finance-labels";
 import type {
@@ -169,6 +170,16 @@ export default function FinanzasPage() {
     e.preventDefault();
     setSaving(true);
     setError("");
+
+    if (suggestsQuoteLink(form.tipo, form.categoria) && !form.quoteId) {
+      const proceed = confirm(
+        "Este movimiento no está vinculado a una cotización. No aparecerá en la utilidad por obra de Obras. ¿Guardar de todos modos?",
+      );
+      if (!proceed) {
+        setSaving(false);
+        return;
+      }
+    }
 
     const payload = {
       tipo: form.tipo,
@@ -349,7 +360,11 @@ export default function FinanzasPage() {
                 ]}
               />
               <Select
-                label="Cotización (opcional)"
+                label={
+                  suggestsQuoteLink(form.tipo, form.categoria)
+                    ? "Cotización (recomendado)"
+                    : "Cotización (opcional)"
+                }
                 value={form.quoteId}
                 onChange={(e) => setForm((prev) => ({ ...prev, quoteId: e.target.value }))}
                 options={[
@@ -360,6 +375,11 @@ export default function FinanzasPage() {
                   })),
                 ]}
               />
+              {suggestsQuoteLink(form.tipo, form.categoria) && !form.quoteId && (
+                <p className="sm:col-span-2 text-sm text-amber-700">
+                  Vincula la cotización para que este movimiento cuente en la utilidad por obra.
+                </p>
+              )}
 
               {form.categoria === "pago_colaborador" && (
                 <>

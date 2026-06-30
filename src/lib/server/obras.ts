@@ -29,7 +29,7 @@ export function getObrasDashboard(): ObrasDashboard {
   const db = getDb();
   const payload = getFullSyncPayload();
   const movements = (db
-    .prepare("SELECT * FROM finance_movements WHERE quoteId IS NOT NULL")
+    .prepare("SELECT * FROM finance_movements ORDER BY fecha DESC")
     .all() as Record<string, unknown>[])
     .map(rowToFinanceMovement);
 

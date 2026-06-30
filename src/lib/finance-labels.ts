@@ -58,3 +58,29 @@ export function categoriesForTipo(tipo: FinanceMovementType): FinanceCategory[] 
 export function defaultCategoryForTipo(tipo: FinanceMovementType): FinanceCategory {
   return tipo === "ingreso" ? "anticipo_obra" : "gasto_operativo";
 }
+
+export const OBRA_COBRO_CATEGORIES: FinanceCategory[] = [
+  "anticipo_obra",
+  "cobro_parcial",
+  "cobro_liquidacion",
+];
+
+export const OBRA_EGRESO_CATEGORIES: FinanceCategory[] = [
+  "material",
+  "gasto_obra",
+  "pago_colaborador",
+];
+
+export function isObraEgresoCategory(categoria: FinanceCategory): boolean {
+  return OBRA_EGRESO_CATEGORIES.includes(categoria);
+}
+
+export function suggestsQuoteLink(
+  tipo: FinanceMovementType,
+  categoria: FinanceCategory,
+): boolean {
+  if (tipo === "ingreso") {
+    return OBRA_COBRO_CATEGORIES.includes(categoria);
+  }
+  return isObraEgresoCategory(categoria);
+}

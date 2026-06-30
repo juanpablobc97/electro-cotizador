@@ -1,10 +1,14 @@
+import { OBRA_COBRO_CATEGORIES, isObraEgresoCategory } from "./finance-labels";
 import type {
   Client,
-  FinanceCategory,
   FinanceMovement,
   ObraEtapa,
   ObraItem,
+  ObraMovementBreakdown,
+  ObraProfitability,
   ObrasDashboard,
+  ObrasReport,
+  ObrasReportSummary,
   ObrasSummary,
   Quote,
   ServiceSheet,
@@ -29,12 +33,6 @@ export const OBRA_ETAPA_ORDER: ObraEtapa[] = [
   "cobrada",
 ];
 
-const COBRO_CATEGORIES: FinanceCategory[] = [
-  "anticipo_obra",
-  "cobro_parcial",
-  "cobro_liquidacion",
-];
-
 type BuildObrasInput = {
   clients: Client[];
   surveys: Survey[];
@@ -47,7 +45,7 @@ function cobradoPorQuote(movements: FinanceMovement[]): Map<number, number> {
   const map = new Map<number, number>();
   for (const movement of movements) {
     if (movement.tipo !== "ingreso" || movement.quoteId == null) continue;
-    if (!COBRO_CATEGORIES.includes(movement.categoria)) continue;
+    if (!OBRA_COBRO_CATEGORIES.includes(movement.categoria)) continue;
     map.set(movement.quoteId, (map.get(movement.quoteId) ?? 0) + movement.monto);
   }
   return map;
@@ -104,6 +102,91 @@ function buildSummary(obras: ObraItem[]): ObrasSummary {
   }
 
   return { totalPorCobrar, obrasActivas, porEtapa };
+}
+
+function emptyBreakdown(): ObraMovementBreakdown {
+  return {
+    egresosMaterial: 0,
+    egresosGastoObra: 0,
+    egresosColaborador: 0,
+    egresosOtros: 0,
+    totalEgresos: 0,
+  };
+}
+
+function buildBreakdownForQuote(quoteId: number, movements: FinanceMovement[]): ObraMovementBreakdown {
+  const breakdown = emptyBreakdown();
+
+  for (const movement of movements) {
+    if (movement.quoteId !== quoteId || movement.tipo !== "egreso") continue;
+
+    switch (movement.categoria) {
+      case "material":
+        breakdown.egresosMaterial += movement.monto;
+        break;
+      case "gasto_obra":
+        breakdown.egresosGastoObra += movement.monto;
+        break;
+      case "pago_colaborador":
+        breakdown.egresosColaborador += movement.monto;
+        break;
+      default:
+        breakdown.egresosOtros += movement.monto;
+        break;
+    }
+  }
+
+  breakdown.totalEgresos =
+    breakdown.egresosMaterial +
+    breakdown.egresosGastoObra +
+    breakdown.egresosColaborador +
+    breakdown.egresosOtros;
+
+  return breakdown;
+}
+
+export function buildObrasReport(obras: ObraItem[], movements: FinanceMovement[]): ObrasReport {
+  let egresosSinObra = 0;
+  let montoEgresosSinObra = 0;
+
+  for (const movement of movements) {
+    if (movement.tipo !== "egreso" || movement.quoteId != null) continue;
+    if (!isObraEgresoCategory(movement.categoria)) continue;
+    egresosSinObra += 1;
+    montoEgresosSinObra += movement.monto;
+  }
+
+  const profitability: ObraProfitability[] = obras
+    .filter((obra) => obra.quoteId != null && obra.etapa !== "rechazada")
+    .map((obra) => {
+      const breakdown = buildBreakdownForQuote(obra.quoteId!, movements);
+      const presupuestado = obra.quoteTotal ?? 0;
+      const gastado = breakdown.totalEgresos;
+      const utilidad = obra.cobrado - gastado;
+      const margenPct = obra.cobrado > 0 ? (utilidad / obra.cobrado) * 100 : null;
+
+      return {
+        ...obra,
+        presupuestado,
+        gastado,
+        breakdown,
+        utilidad,
+        margenPct,
+      };
+    })
+    .sort((a, b) => b.utilidad - a.utilidad);
+
+  const summary: ObrasReportSummary = {
+    totalPresupuestado: profitability.reduce((sum, obra) => sum + obra.presupuestado, 0),
+    totalCobrado: profitability.reduce((sum, obra) => sum + obra.cobrado, 0),
+    totalGastado: profitability.reduce((sum, obra) => sum + obra.gastado, 0),
+    utilidadGlobal: profitability.reduce((sum, obra) => sum + obra.utilidad, 0),
+    obrasConGastos: profitability.filter((obra) => obra.gastado > 0).length,
+    egresosSinObra,
+    montoEgresosSinObra,
+  };
+
+  return { obras: profitability, summary };
 }
 
 export function buildObrasDashboard(input: BuildObrasInput): ObrasDashboard {
@@ -173,9 +256,12 @@ export function buildObrasDashboard(input: BuildObrasInput): ObrasDashboard {
     )
     .sort((a, b) => b.saldo - a.saldo);
 
+  const visibleObras = obras.filter((obra) => obra.etapa !== "rechazada");
+
   return {
-    obras: obras.filter((obra) => obra.etapa !== "rechazada"),
+    obras: visibleObras,
     receivables,
     summary: buildSummary(obras),
+    report: buildObrasReport(visibleObras, input.movements),
   };
 }
